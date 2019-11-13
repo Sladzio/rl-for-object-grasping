@@ -3,23 +3,20 @@
 # LGPL-2.1+ license. See the accompanying LICENSE file for details.
 
 import os, inspect
-
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-print("current_dir=" + currentdir)
-os.sys.path.insert(0, currentdir)
-
-import math as m
 import gym
 from gym import spaces
-from gym.utils import seeding
 import numpy as np
 import time
 import pybullet as p
 from . import PandaEnv
-import random
 import pybullet_data
 import robot_data
-from pkg_resources import parse_version
+
+
+currentDir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+print("current_dir=" + currentDir)
+os.sys.path.insert(0, currentDir)
+
 
 largeValObservation = 100
 
