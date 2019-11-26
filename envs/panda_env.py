@@ -40,7 +40,7 @@ class PandaEnv:
             p.resetJointState(self.pandaId, i, 0)
             p.setJointMotorControl2(self.pandaId, i, p.POSITION_CONTROL, targetPosition=0, force=self.max_force)
         if self.useInverseKinematics:
-            self.endEffPos = [0.537, 0.0, 0.5] # x,y,z
+            self.endEffPos = [0.537, 0.0, 0.5]  # x,y,z
             self.endEffOrn = [0, 0, 0]  # roll,pitch,yaw
 
     def getJointsRanges(self):
@@ -123,12 +123,12 @@ class PandaEnv:
             p.setJointMotorControl2(self.pandaId,
                                     9,
                                     p.POSITION_CONTROL,
-                                    targetPosition=finger_angle,
+                                    targetPosition=finger_angle * 0.05,
                                     force=self.fingerAForce)
             p.setJointMotorControl2(self.pandaId,
                                     10,
                                     p.POSITION_CONTROL,
-                                    targetPosition=finger_angle,
+                                    targetPosition=finger_angle * 0.05,
                                     force=self.fingerBForce)
 
         else:

@@ -22,7 +22,7 @@ def main():
             env.render(mode='human')
             obs, rew, done, _ = env.step([0.5, 0.5, 0.5,
                                           0, 0, 0,
-                                          .1])
+                                          1])
             episode_rew += rew
         print("Episode reward", episode_rew)
 
