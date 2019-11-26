@@ -14,11 +14,12 @@ class PandaEnv:
     def __init__(self, urdfRootPath=robot_data.getDataPath(), timeStep=0.01, useInverseKinematics=0,
                  basePosition=[-0.6, -0.4, 0.625], action_space=7, includeVelObs=True):
 
-        self.urdfRootPath = os.path.join(urdfRootPath, "franka/robots/panda_arm_physics.urdf")
+        self.fingerAForce = 2
+        self.fingerBForce = 2.5
+        self.urdfRootPath = os.path.join(urdfRootPath, "franka/robot/panda.urdf")
         self.timeStep = timeStep
         self.useInverseKinematics = useInverseKinematics
         self.useNullSpace = 0
-        self.useOrientation = 1
         self.useSimulation = 1
         self.basePosition = basePosition
         self.workspace_lim = [[0.3, 0.60], [-0.3, 0.3], [0, 1]]
@@ -27,6 +28,8 @@ class PandaEnv:
         self.action_space = action_space
         self.includeVelObs = includeVelObs
         self.numJoints = 7
+        self.max_force = 200
+        self.max_velocity = .35
         self.reset()
 
     def reset(self):
@@ -35,11 +38,10 @@ class PandaEnv:
 
         for i in range(self.numJoints):
             p.resetJointState(self.pandaId, i, 0)
-            p.setJointMotorControl2(self.pandaId, i, p.POSITION_CONTROL, targetPosition=0, targetVelocity=0.0,
-                                    positionGain=0.25, velocityGain=0.75, force=50)
+            p.setJointMotorControl2(self.pandaId, i, p.POSITION_CONTROL, targetPosition=0, force=self.max_force)
         if self.useInverseKinematics:
-            self.endEffPos = [0.4, 0, 0.85]  # x,y,z
-            self.endEffOrn = [0.3, 0.4, 0.35]  # roll,pitch,yaw
+            self.endEffPos = [0.537, 0.0, 0.5] # x,y,z
+            self.endEffOrn = [0, 0, 0]  # roll,pitch,yaw
 
     def getJointsRanges(self):
         # to-be-defined
@@ -65,67 +67,74 @@ class PandaEnv:
             observation.extend(list(velL))
             observation.extend(list(velA))
 
-        jointStates = p.getJointStates(self.pandaId, range(11))
-        jointPoses = [x[0] for x in jointStates]
-        observation.extend(list(jointPoses))
+        joint_states = p.getJointStates(self.pandaId, range(11))
+        joint_poses = [x[0] for x in joint_states]
+        observation.extend(list(joint_poses))
 
         return observation
 
-    def applyAction(self, action):
+    def apply_action(self, action):
 
-        if (self.useInverseKinematics):
-            assert len(action) >= 3, ('IK dim differs from ', len(action))
-            assert len(action) <= 6, ('IK dim differs from ', len(action))
+        if self.useInverseKinematics:
+            dx = action[0]
+            dy = action[1]
+            dz = action[2]
 
-            dx, dy, dz = action[:3]
+            droll = action[3]
+            dpitch = action[4]
+            dyaw = action[5]
+
+            finger_angle = action[6]
 
             self.endEffPos[0] = min(self.workspace_lim_endEff[0][1],
                                     max(self.workspace_lim_endEff[0][0], self.endEffPos[0] + dx))
             self.endEffPos[1] = min(self.workspace_lim_endEff[1][1],
-                                    max(self.workspace_lim_endEff[1][0], self.endEffPos[1] + dx))
+                                    max(self.workspace_lim_endEff[1][0], self.endEffPos[1] + dy))
             self.endEffPos[2] = min(self.workspace_lim_endEff[2][1],
-                                    max(self.workspace_lim_endEff[2][0], self.endEffPos[2] + dx))
+                                    max(self.workspace_lim_endEff[2][0], self.endEffPos[2] + dz))
 
-            if not self.useOrientation:
-                quat_orn = p.getQuaternionFromEuler(self.handOrn)
+            self.endEffOrn[0] = min(m.pi, max(-m.pi, self.endEffOrn[0] + droll))
+            self.endEffOrn[1] = min(m.pi, max(-m.pi, self.endEffOrn[1] + dpitch))
+            self.endEffOrn[2] = min(m.pi, max(-m.pi, self.endEffOrn[2] + dyaw))
 
-            elif len(action) is 6:
-                droll, dpitch, dyaw = action[3:]
-                self.endEffOrn[0] = min(m.pi, max(-m.pi, self.endEffOrn[0] + droll))
-                self.endEffOrn[1] = min(m.pi, max(-m.pi, self.endEffOrn[1] + dpitch))
-                self.endEffOrn[2] = min(m.pi, max(-m.pi, self.endEffOrn[2] + dyaw))
-                quat_orn = p.getQuaternionFromEuler(self.endEffOrn)
+            quat_orn = p.getQuaternionFromEuler(self.endEffOrn)
 
-            else:
-                quat_orn = p.getLinkState(self.pandaId, self.endEffLink)[5]
+            joint_poses = p.calculateInverseKinematics(self.pandaId, self.endEffLink, self.endEffPos, quat_orn)
 
-            jointPoses = p.calculateInverseKinematics(self.pandaId, self.endEffLink, self.endEffPos, quat_orn)
-
-            if (self.useSimulation):
+            if self.useSimulation:
                 for i in range(self.numJoints):
-                    jointInfo = p.getJointInfo(self.pandaId, i)
-                    if jointInfo[3] > -1:
+                    joint_info = p.getJointInfo(self.pandaId, i)
+                    if joint_info[3] > -1:
                         p.setJointMotorControl2(bodyUniqueId=self.pandaId,
                                                 jointIndex=i,
                                                 controlMode=p.POSITION_CONTROL,
-                                                targetPosition=jointPoses[i],
+                                                targetPosition=joint_poses[i],
                                                 targetVelocity=0,
-                                                positionGain=0.25,
-                                                velocityGain=0.75,
-                                                force=50)
+                                                force=self.max_force,
+                                                maxVelocity=self.max_velocity,
+                                                positionGain=0.3,
+                                                velocityGain=1)
             else:
                 for i in range(self.numJoints):
-                    p.resetJointState(self.pandaId, i, jointPoses[i])
+                    p.resetJointState(self.pandaId, i, joint_poses[i])
 
+            # fingers
+
+            p.setJointMotorControl2(self.pandaId,
+                                    9,
+                                    p.POSITION_CONTROL,
+                                    targetPosition=finger_angle,
+                                    force=self.fingerAForce)
+            p.setJointMotorControl2(self.pandaId,
+                                    10,
+                                    p.POSITION_CONTROL,
+                                    targetPosition=finger_angle,
+                                    force=self.fingerBForce)
 
         else:
-            assert len(action) == self.action_space, (
-                'number of motor commands differs from number of motor to control', len(action))
-
             for a in range(len(action)):
                 curr_motor_pos = p.getJointState(self.pandaId, a)[0]
                 new_motor_pos = curr_motor_pos + action[a]  # supposed to be a delta
-
                 p.setJointMotorControl2(self.pandaId,
                                         a,
                                         p.POSITION_CONTROL,
@@ -133,4 +142,4 @@ class PandaEnv:
                                         targetVelocity=0,
                                         positionGain=0.25,
                                         velocityGain=0.75,
-                                        force=100)
+                                        force=self.max_force)

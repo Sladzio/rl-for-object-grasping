@@ -1,22 +1,19 @@
-# Copyright (C) 2019 Istituto Italiano di Tecnologia (IIT)
-# This software may be modified and distributed under the terms of the
-# LGPL-2.1+ license. See the accompanying LICENSE file for details.
-
-import os, inspect
-import gym
-from gym import spaces
-import numpy as np
+import inspect
+import os
 import time
-import pybullet as p
-from . import PandaEnv
-import pybullet_data
-import robot_data
 
+import gym
+import numpy as np
+import pybullet as p
+import pybullet_data
+from gym import spaces
+
+import robot_data
+from . import PandaEnv
 
 currentDir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 print("current_dir=" + currentDir)
 os.sys.path.insert(0, currentDir)
-
 
 largeValObservation = 100
 
@@ -70,10 +67,6 @@ class PandaGraspGymEnv(gym.Env):
         else:
             p.connect(p.DIRECT)
 
-        # self.seed()
-        # initialize simulation environment
-        self.reset()
-
         observationDim = len(self._observation)
         observation_high = np.array([largeValObservation] * observationDim)
         self.observation_space = spaces.Box(-observation_high, observation_high, dtype='float32')
@@ -123,8 +116,7 @@ class PandaGraspGymEnv(gym.Env):
         self._debugGUI()
         p.setGravity(0, 0, -9.8)
         # Let the world run for a bit
-        for _ in range(10):
-            p.stepSimulation()
+        p.stepSimulation()
 
         self._observation = self.getExtendedObservation()
         return np.array(self._observation)
@@ -140,18 +132,9 @@ class PandaGraspGymEnv(gym.Env):
         return self._observation
 
     def step(self, action):
-        if self._useIK:
-            # TO DO
-            return 0
-
-        else:
-            action = [float(i * 0.05) for i in action]
-            return self.step2(action)
-
-    def step2(self, action):
 
         for i in range(self._actionRepeat):
-            self._panda.applyAction(action)
+            self._panda.apply_action(action)
             p.stepSimulation()
 
             if self._termination():
@@ -171,24 +154,25 @@ class PandaGraspGymEnv(gym.Env):
         return np.array(self._observation), np.array([reward]), np.array(done), {}
 
     def render(self, mode="rgb_array", close=False):
-        ## TODO Check the behavior of this function
         if mode != "rgb_array":
             return np.array([])
 
         base_pos, orn = self._p.getBasePositionAndOrientation(self._panda.pandaId)
-        view_matrix = self._p.computeViewMatrixFromYawPitchRoll(
-            cameraTargetPosition=base_pos,
-            distance=self._cam_dist,
-            yaw=self._cam_yaw,
-            pitch=self._cam_pitch,
-            roll=0,
-            upAxisIndex=2)
-        proj_matrix = self._p.computeProjectionMatrixFOV(
-            fov=60, aspect=float(RENDER_WIDTH) / RENDER_HEIGHT,
-            nearVal=0.1, farVal=100.0)
-        (_, _, px, _, _) = self._p.getCameraImage(
-            width=RENDER_WIDTH, height=RENDER_HEIGHT, viewMatrix=view_matrix,
-            projectionMatrix=proj_matrix, renderer=self._p.ER_BULLET_HARDWARE_OPENGL)
+        view_matrix = self._p.computeViewMatrixFromYawPitchRoll(cameraTargetPosition=base_pos,
+                                                                distance=self._cam_dist,
+                                                                yaw=self._cam_yaw,
+                                                                pitch=self._cam_pitch,
+                                                                roll=0,
+                                                                upAxisIndex=2)
+        proj_matrix = self._p.computeProjectionMatrixFOV(fov=60,
+                                                         aspect=float(RENDER_WIDTH) / RENDER_HEIGHT,
+                                                         nearVal=0.1,
+                                                         farVal=100.0)
+        (_, _, px, _, _) = self._p.getCameraImage(width=RENDER_WIDTH,
+                                                  height=RENDER_HEIGHT,
+                                                  viewMatrix=view_matrix,
+                                                  projectionMatrix=proj_matrix,
+                                                  renderer=self._p.ER_BULLET_HARDWARE_OPENGL)
         # renderer=self._p.ER_TINY_RENDERER)
 
         rgb_array = np.array(px, dtype=np.uint8)

@@ -1,57 +1,30 @@
-# Copyright (C) 2019 Istituto Italiano di Tecnologia (IIT)
-# This software may be modified and distributed under the terms of the
-# LGPL-2.1+ license. See the accompanying LICENSE file for details.
-
-import os, inspect
-
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-print(currentdir)
-parentdir = os.path.dirname(os.path.dirname(currentdir))
-os.sys.path.insert(0, parentdir)
-
-from envs.panda_grasp_env import PandaGraspGymEnv
+import inspect
+import os
 import robot_data
+from envs.panda_grasp_env import PandaGraspGymEnv
+
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+print(current_dir)
+parent_dir = os.path.dirname(os.path.dirname(current_dir))
+os.sys.path.insert(0, parent_dir)
+
 
 def main():
-    use_IK = 0
-    discreteAction = 0
-    use_IK = 1 if discreteAction else use_IK
+    env = PandaGraspGymEnv(urdfRoot=robot_data.getDataPath(), renders=True, useIK=True, isDiscrete=False)
 
-    env = PandaGraspGymEnv(urdfRoot=robot_data.getDataPath(), renders=True, useIK=use_IK, isDiscrete=discreteAction)
-    motorsIds = []
-
-    if (env._isDiscrete):
-        dv = 12
-        motorsIds.append(env._p.addUserDebugParameter("lhPosX", -dv, dv, 0))
-    else:
-        dv = 1
-        # joints_idx = env._icub.motorIndices
-
-        for j in range(7):
-            info = env._p.getJointInfo(env._panda.pandaId, j)
-            jointName = info[1]
-            motorsIds.append(env._p.addUserDebugParameter(jointName.decode("utf-8"), -dv, dv, 0.0))
-
-    done = False
-    env._p.addUserDebugText('current hand position', [0, -0.5, 1.4], [1.1, 0, 0])
-    idx = env._p.addUserDebugText(' ', [0, -0.5, 1.2], [1, 0, 0])
-
-    for t in range(10000000):
-        # env.render()
-        action = []
-        for motorId in range(7):
-            action.append(env._p.readUserDebugParameter(motorId))
-
-        action = int(action[0]) if discreteAction else action
-
-        # print(env.step(action))
-
-        state, reward, done, _ = env.step(action)
-        if t % 10 == 0:
-            print("reward ", reward)
-            print("done ", done)
-            env._p.addUserDebugText(' '.join(str(round(e, 2)) for e in state[:6]), [0, -0.5, 1.2], [1, 0, 0],
-                                    replaceItemUniqueId=idx)
+    while True:
+        obs, done = env.reset(), False
+        print("===================================")
+        print("obs")
+        print(obs)
+        episode_rew = 0
+        while not done:
+            env.render(mode='human')
+            obs, rew, done, _ = env.step([0.5, 0.5, 0.5,
+                                          0, 0, 0,
+                                          .1])
+            episode_rew += rew
+        print("Episode reward", episode_rew)
 
 
 if __name__ == '__main__':
