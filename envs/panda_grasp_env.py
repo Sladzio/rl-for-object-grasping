@@ -37,7 +37,7 @@ class PandaGraspGymEnv(gym.Env):
                  renders=False,
                  maxSteps=1000,
                  dist_delta=0.03,
-                 fixedPositionObj=True,
+                 fixedPositionObj=False,
                  includeVelObs=True,
                  numControlledJoints=7):
 
@@ -84,7 +84,7 @@ class PandaGraspGymEnv(gym.Env):
         else:
             # self.action_dim = 2 #self._panda.getActionDimension()
             self._action_bound = 1
-            action_high = np.array([self._action_bound] * self.action_dim)
+            action_high = np.array([self._action_bound] * self.action_space)
             self.action_space = spaces.Box(-action_high, action_high, dtype='float32')
 
         self.viewer = None
@@ -118,7 +118,7 @@ class PandaGraspGymEnv(gym.Env):
         else:
             self.target_pose = self._sample_pose()[0]
             self._objID = p.loadURDF(os.path.join(self._urdfRoot, "franka/cube_small.urdf"),
-                                     basePosition=self.target_pose, useFixedBase=True)
+                                     basePosition=self.target_pose, useFixedBase=False)
 
         self._debugGUI()
         p.setGravity(0, 0, -9.8)
