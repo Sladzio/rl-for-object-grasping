@@ -12,7 +12,7 @@ import math as m
 class PandaEnv:
 
     def __init__(self, urdfRootPath=robot_data.getDataPath(), timeStep=0.01, useInverseKinematics=0,
-                 basePosition=[-0.6, -0.4, 0.625], action_space=7, includeVelObs=True):
+                 basePosition=[-0.6, -0.4, 0.625], numControlledJoints=7, includeVelObs=True):
 
         self.fingerAForce = 2
         self.fingerBForce = 2.5
@@ -25,9 +25,8 @@ class PandaEnv:
         self.workspace_lim = [[0.3, 0.60], [-0.3, 0.3], [0, 1]]
         self.workspace_lim_endEff = [[0.1, 0.70], [-0.4, 0.4], [0.65, 1]]
         self.endEffLink = 8
-        self.action_space = action_space
         self.includeVelObs = includeVelObs
-        self.numJoints = 7
+        self.numControlledJoints = numControlledJoints
         self.max_force = 200
         self.max_velocity = .35
         self.reset()
@@ -36,7 +35,7 @@ class PandaEnv:
         # load model and position it's base on base position
         self.pandaId = p.loadURDF(self.urdfRootPath, basePosition=self.basePosition, useFixedBase=True)
 
-        for i in range(self.numJoints):
+        for i in range(self.numControlledJoints):
             p.resetJointState(self.pandaId, i, 0)
             p.setJointMotorControl2(self.pandaId, i, p.POSITION_CONTROL, targetPosition=0, force=self.max_force)
         if self.useInverseKinematics:
@@ -48,7 +47,7 @@ class PandaEnv:
         return 0
 
     def getActionDimension(self):
-        return self.action_space
+        return self.numControlledJoints
 
     def getObservationDimension(self):
         return len(self.getObservation())
@@ -76,6 +75,7 @@ class PandaEnv:
     def apply_action(self, action):
 
         if self.useInverseKinematics:
+
             dx = action[0]
             dy = action[1]
             dz = action[2]
@@ -102,7 +102,7 @@ class PandaEnv:
             joint_poses = p.calculateInverseKinematics(self.pandaId, self.endEffLink, self.endEffPos, quat_orn)
 
             if self.useSimulation:
-                for i in range(self.numJoints):
+                for i in range(self.numControlledJoints):
                     joint_info = p.getJointInfo(self.pandaId, i)
                     if joint_info[3] > -1:
                         p.setJointMotorControl2(bodyUniqueId=self.pandaId,
@@ -115,7 +115,7 @@ class PandaEnv:
                                                 positionGain=0.3,
                                                 velocityGain=1)
             else:
-                for i in range(self.numJoints):
+                for i in range(self.numControlledJoints):
                     p.resetJointState(self.pandaId, i, joint_poses[i])
 
             # fingers

@@ -36,10 +36,17 @@ class PandaGraspGymEnv(gym.Env):
                  actionRepeat=1,
                  renders=False,
                  maxSteps=1000,
-                 dist_delta=0.03, numControlledJoints=7, fixedPositionObj=True, includeVelObs=True):
+                 dist_delta=0.03,
+                 fixedPositionObj=True,
+                 includeVelObs=True,
+                 numControlledJoints=7):
 
-        self.action_dim = numControlledJoints
+        self.numControlledJoints = numControlledJoints
         self._isDiscrete = isDiscrete
+        if self._isDiscrete:
+            self.action_space = 13
+        else:
+            self.action_space = self.numControlledJoints
         self._timeStep = 1. / 240.
         self._useIK = useIK
         self._urdfRoot = urdfRoot
@@ -66,8 +73,8 @@ class PandaGraspGymEnv(gym.Env):
             p.resetDebugVisualizerCamera(2.5, 90, -60, [0.52, -0.2, -0.33])
         else:
             p.connect(p.DIRECT)
-
-        observationDim = len(self._observation)
+        self.reset()
+        observationDim = len(self.getExtendedObservation())
         observation_high = np.array([largeValObservation] * observationDim)
         self.observation_space = spaces.Box(-observation_high, observation_high, dtype='float32')
 
@@ -92,7 +99,7 @@ class PandaGraspGymEnv(gym.Env):
         p.loadURDF(os.path.join(pybullet_data.getDataPath(), "plane.urdf"), useFixedBase=True)
         # Load robot
         self._panda = PandaEnv(self._urdfRoot, timeStep=self._timeStep, basePosition=[0, 0, 0.625],
-                               useInverseKinematics=self._useIK, action_space=self.action_dim,
+                               useInverseKinematics=self._useIK, numControlledJoints=self.numControlledJoints,
                                includeVelObs=self.includeVelObs)
 
         # Load table and object for simulation
@@ -125,13 +132,34 @@ class PandaGraspGymEnv(gym.Env):
 
         # get robot observations
         self._observation = self._panda.getObservation()
-        objPos, objOrn = p.getBasePositionAndOrientation(self._objID)
+        target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self._objID)
 
-        self._observation.extend(list(objPos))
-        self._observation.extend(list(objOrn))
+        self._observation.extend(list(target_obj_pos))
+        self._observation.extend(list(target_obj_orn))
         return self._observation
 
     def step(self, action):
+        if self._isDiscrete:
+            dv = 0.01
+            dx = [0, -dv, dv, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][action]
+            dy = [0, 0, 0, -dv, dv, 0, 0, 0, 0, 0, 0, 0, 0][action]
+            dz = [0, 0, 0, 0, 0, -dv, dv, 0, 0, 0, 0, 0, 0][action]
+            droll = [0, 0, 0, 0, 0, 0, 0, -dv, dv, 0, 0, 0, 0][action]
+            dpitch = [0, 0, 0, 0, 0, 0, 0, 0, 0, -dv, dv, 0, 0][action]
+            dyaw = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -dv, dv][action]
+            f = 1
+            real_action = [dx, dy, dz, droll, dpitch, dyaw, f]
+            return self.real_step(real_action)
+        else:
+            dv = 0.01
+            dx = action[0] * dv
+            dy = action[1] * dv
+            da = action[2] * dv
+            f = 1
+            real_action = [dx, dy, -0.002, da, f]
+            return self.real_step(real_action)
+
+    def real_step(self, action):
 
         for i in range(self._actionRepeat):
             self._panda.apply_action(action)
@@ -151,7 +179,7 @@ class PandaGraspGymEnv(gym.Env):
 
         done = self._termination()
 
-        return np.array(self._observation), np.array([reward]), np.array(done), {}
+        return np.array(self._observation), reward, done, {}
 
     def render(self, mode="rgb_array", close=False):
         if mode != "rgb_array":
@@ -183,23 +211,43 @@ class PandaGraspGymEnv(gym.Env):
 
     def _termination(self):
 
-        endEffPose = self._panda.getObservation()[0:3]
-        objPos, objOrn = p.getBasePositionAndOrientation(self._objID)
-        d = goal_distance(np.array(objPos), np.array(endEffPose))
+        end_eff_pos = self._panda.getObservation()[0:3]
+        target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self._objID)
+        d = goal_distance(np.array(target_obj_pos), np.array(end_eff_pos))
 
         if d <= self._target_dist_min:
             self.terminated = True
-
-        if (self.terminated or self._envStepCounter > self._maxSteps):
+            self.perform_grasp()
             self._observation = self.getExtendedObservation()
-            return [True]
+            return True
 
-        return [False]
+        return False
+
+    def perform_grasp(self):
+        finger_angle = 0.3
+        for i in range(100):
+            grasp_action = [0, 0, 0.0001, 0, 0, 0, finger_angle]
+            self._panda.apply_action(grasp_action)
+            p.stepSimulation()
+            finger_angle = finger_angle - (0.3 / 100.)
+            if finger_angle < 0:
+                finger_angle = 0
+        for i in range(1000):
+            grasp_action = [0, 0, 0.001, 0, finger_angle]
+            self._panda.apply_action(grasp_action)
+            p.stepSimulation()
+            block_pos, block_orn = p.getBasePositionAndOrientation(self._objID)
+            if block_pos[2] > 0.23:
+                break
+            state = p.getLinkState(self._panda.pandaId, self._panda.endEffLink)
+            actual_end_effector_pos = state[0]
+            if actual_end_effector_pos[2] > 0.5:
+                break
 
     def _compute_reward(self):
-        objPos, objOrn = p.getBasePositionAndOrientation(self._objID)
-        endEffAct = self._panda.getObservation()[0:3]
-        d = goal_distance(np.array(endEffAct), np.array(objPos))
+        target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self._objID)
+        end_effector_pos = self._panda.getObservation()[0:3]
+        d = goal_distance(np.array(end_effector_pos), np.array(target_obj_pos))
         reward = -d
         if d <= self._target_dist_min:
             reward = np.float32(1000.0) + (100 - d * 80)

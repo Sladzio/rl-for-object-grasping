@@ -2,7 +2,6 @@ import inspect
 import os
 import robot_data
 from envs.panda_grasp_env import PandaGraspGymEnv
-
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 print(current_dir)
 parent_dir = os.path.dirname(os.path.dirname(current_dir))
