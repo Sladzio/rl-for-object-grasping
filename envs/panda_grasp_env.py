@@ -151,12 +151,15 @@ class PandaGraspGymEnv(gym.Env):
             real_action = [dx, dy, dz, droll, dpitch, dyaw, f]
             return self.real_step(real_action)
         else:
-            dv = 0.01
+            dv = 1
             dx = action[0] * dv
             dy = action[1] * dv
-            da = action[2] * dv
+            dz = action[2] * dv
+            droll = action[3] * dv
+            dpitch = action[4] * dv
+            dyaw = action[5] * dv
             f = 1
-            real_action = [dx, dy, -0.002, da, f]
+            real_action = [dx, dy, dz, droll, dpitch, dyaw, f]
             return self.real_step(real_action)
 
     def real_step(self, action):
@@ -215,7 +218,7 @@ class PandaGraspGymEnv(gym.Env):
         target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self._objID)
         d = goal_distance(np.array(target_obj_pos), np.array(end_eff_pos))
 
-        if d <= self._target_dist_min:
+        if d <= self._target_dist_min or self._envStepCounter > self._maxSteps:
             self.terminated = True
             self.perform_grasp()
             self._observation = self.getExtendedObservation()
@@ -233,7 +236,7 @@ class PandaGraspGymEnv(gym.Env):
             if finger_angle < 0:
                 finger_angle = 0
         for i in range(1000):
-            grasp_action = [0, 0, 0.001, 0, finger_angle]
+            grasp_action = [0, 0, 0.001, 0, 0, 0, finger_angle]
             self._panda.apply_action(grasp_action)
             p.stepSimulation()
             block_pos, block_orn = p.getBasePositionAndOrientation(self._objID)
@@ -245,13 +248,38 @@ class PandaGraspGymEnv(gym.Env):
                 break
 
     def _compute_reward(self):
-        target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self._objID)
-        end_effector_pos = self._panda.getObservation()[0:3]
-        d = goal_distance(np.array(end_effector_pos), np.array(target_obj_pos))
-        reward = -d
-        if d <= self._target_dist_min:
-            reward = np.float32(1000.0) + (100 - d * 80)
+
+        blockPos, blockOrn = p.getBasePositionAndOrientation(self._objID)
+        closestPoints = p.getClosestPoints(self._objID, self._panda.pandaId, 1000, -1,
+                                           self._panda.endEffLink)
+
+        reward = -1000
+
+        numPt = len(closestPoints)
+        # print(numPt)
+        if (numPt > 0):
+            # print("reward:")
+            reward = -closestPoints[0][8] * 10
+        if (blockPos[2] > 0.8):
+            reward = reward + 10000
+            print("successfully grasped a block!!!")
+            # print("self._envStepCounter")
+            # print(self._envStepCounter)
+            # print("self._envStepCounter")
+            # print(self._envStepCounter)
+            # print("reward")
+            # print(reward)
+        # print("reward")
+        # print(reward)
         return reward
+
+        # target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self._objID)
+        # end_effector_pos = self._panda.getObservation()[0:3]
+        # d = goal_distance(np.array(end_effector_pos), np.array(target_obj_pos))
+        # reward = -d
+        # if d <= self._target_dist_min:
+        #     reward = np.float32(1000.0) + (100 - d * 80)
+        # return reward
 
     def _sample_pose(self):
         ws_lim = self._panda.workspace_lim
