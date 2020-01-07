@@ -1,21 +1,19 @@
 import os, inspect
+import pybullet as p
+import robot_data
+import math as m
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(os.path.dirname(currentdir))
 os.sys.path.insert(0, parentdir)
 
-import pybullet as p
-import robot_data
-import math as m
-
 
 class PandaEnv:
 
     def __init__(self, urdfRootPath=robot_data.getDataPath(), timeStep=0.01, useInverseKinematics=0,
-                 basePosition=[-0.6, -0.4, 0.625], numControlledJoints=7, includeVelObs=True):
-
-        self.fingerAForce = 2
-        self.fingerBForce = 2.5
+                 basePosition=[-0.6, -0.4, 0.625], numControlledJoints=7):
+        self.fingerAForce = 10
+        self.fingerBForce = 10
         self.urdfRootPath = os.path.join(urdfRootPath, "franka/robot/panda.urdf")
         self.timeStep = timeStep
         self.useInverseKinematics = useInverseKinematics
@@ -23,24 +21,28 @@ class PandaEnv:
         self.useSimulation = 1
         self.basePosition = basePosition
         self.workspace_lim = [[0.3, 0.60], [-0.3, 0.3], [0, 1]]
-        self.workspace_lim_endEff = [[0.1, 0.70], [-0.4, 0.4], [0.65, 1]]
-        self.endEffLink = 8
-        self.includeVelObs = includeVelObs
+        self.workspace_lim_endEff = [[0.1, 0.70], [-0.4, 0.4], [0.65, 5]]
+        self.gripperIndex = 8
         self.numControlledJoints = numControlledJoints
         self.max_force = 200
         self.max_velocity = .35
+        self.jointPositions = [
+            0.006, 0.4, -0.01, -1.6, 0.005, 2, -2.4, 0, 0, 0.05, 0.05
+        ]
         self.reset()
 
     def reset(self):
         # load model and position it's base on base position
         self.pandaId = p.loadURDF(self.urdfRootPath, basePosition=self.basePosition, useFixedBase=True)
+        for i in range(11):
+            p.resetJointState(self.pandaId, i, self.jointPositions[i])
+            p.setJointMotorControl2(self.pandaId, i, p.POSITION_CONTROL, targetPosition=self.jointPositions[i],
+                                    force=self.max_force)
 
-        for i in range(self.numControlledJoints):
-            p.resetJointState(self.pandaId, i, 0)
-            p.setJointMotorControl2(self.pandaId, i, p.POSITION_CONTROL, targetPosition=0, force=self.max_force)
-        if self.useInverseKinematics:
-            self.endEffPos = [0.537, 0.0, 0.5]  # x,y,z
-            self.endEffOrn = [0, 0, 0]  # roll,pitch,yaw
+        state = p.getLinkState(self.pandaId, self.gripperIndex)
+
+        self.endEffPos = list(state[0])  # x,y,z
+        self.endEffOrn = list(p.getEulerFromQuaternion(list(state[1])))  # roll,pitch,yaw
 
     def getJointsRanges(self):
         # to-be-defined
@@ -54,26 +56,15 @@ class PandaEnv:
 
     def getObservation(self):
         observation = []
-        state = p.getLinkState(self.pandaId, self.endEffLink, computeLinkVelocity=1)
+        state = p.getLinkState(self.pandaId, self.gripperIndex)
         pos = state[0]
         orn = state[1]
         euler = p.getEulerFromQuaternion(orn)
         observation.extend(list(pos))
-        observation.extend(list(euler))  # roll, pitch, yaw
-        if (self.includeVelObs):
-            velL = state[6]
-            velA = state[7]
-            observation.extend(list(velL))
-            observation.extend(list(velA))
-
-        joint_states = p.getJointStates(self.pandaId, range(11))
-        joint_poses = [x[0] for x in joint_states]
-        observation.extend(list(joint_poses))
-
+        observation.extend(list(euler))
         return observation
 
-    def apply_action(self, action):
-
+    def apply_action(self, action, useSimulation=True):
         if self.useInverseKinematics:
 
             dx = action[0]
@@ -99,9 +90,9 @@ class PandaEnv:
 
             quat_orn = p.getQuaternionFromEuler(self.endEffOrn)
 
-            joint_poses = p.calculateInverseKinematics(self.pandaId, self.endEffLink, self.endEffPos, quat_orn)
+            joint_poses = p.calculateInverseKinematics(self.pandaId, self.gripperIndex, self.endEffPos, quat_orn)
 
-            if self.useSimulation:
+            if useSimulation:
                 for i in range(self.numControlledJoints):
                     joint_info = p.getJointInfo(self.pandaId, i)
                     if joint_info[3] > -1:
