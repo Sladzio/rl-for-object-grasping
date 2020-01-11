@@ -242,14 +242,27 @@ class PandaGraspGymEnv(gym.Env):
 
     def _compute_reward(self):
         target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self.targetObjectId)
+
         closestPoints = p.getClosestPoints(self.targetObjectId, self._panda.pandaId, 1000, -1,
                                            self._panda.gripperIndex)
-        numPt = len(closestPoints)
+
         reward = -1000
+
+        numPt = len(closestPoints)
+
         if numPt > 0:
-            reward = -closestPoints[0][8] * 10
+
+            pointA = np.array([closestPoints[0][5][0], closestPoints[0][5][1], 0])
+            pointB = np.array([closestPoints[0][6][0], closestPoints[0][6][1], 0])
+
+            reward = 0
+            horizontal_distance = np.linalg.norm(pointA - pointB)
+            reward -= horizontal_distance * 10
+            if horizontal_distance < 0.05:
+                reward -= closestPoints[0][8] * 10
+
         if target_obj_pos[2] > 0.7:
-            reward += 1000
+            reward = 1000
             print("successfully grasped a block!!!")
         return reward
 
