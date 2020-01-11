@@ -79,7 +79,7 @@ class PandaGraspGymEnv(gym.Env):
         self.observation_space = spaces.Box(-observation_high, observation_high, dtype='float32')
 
         if (self._isDiscrete):
-            self.action_space = spaces.Discrete(self._panda.getActionDimension())
+            self.action_space = spaces.Discrete(self.action_space)
 
         else:
             # self.action_dim = 2 #self._panda.getActionDimension()
@@ -114,7 +114,7 @@ class PandaGraspGymEnv(gym.Env):
 
         if self._fixedPositionObj:
             self.targetObjectId = p.loadURDF(os.path.join(self._urdfRoot, "franka/cube_small.urdf"),
-                                             basePosition=[0.7, 0.0, self._h_table], useFixedBase=False,
+                                             basePosition=[0.7, 0.25, self._h_table], useFixedBase=False,
                                              globalScaling=.5)
         else:
             self.target_pose = self._sample_pose()[0]
@@ -146,7 +146,7 @@ class PandaGraspGymEnv(gym.Env):
         targetObjRelativeToGripper = [targetObjPosInGripperSpace[0], targetObjPosInGripperSpace[1],
                                       targetObjEulerInGripperSpace[2]]
 
-        self._observation.extend(list(targetObjRelativeToGripper))
+        self._observation.extend(targetObjRelativeToGripper)
         # self._observation.extend(list(target_obj_pos))
         # self._observation.extend(list(target_obj_orn))
 
@@ -154,7 +154,7 @@ class PandaGraspGymEnv(gym.Env):
 
     def step(self, action):
         if self._isDiscrete:
-            dv = 0.005
+            dv = 0.001
             dx = [0, -dv, dv, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][action]
             dy = [0, 0, 0, -dv, dv, 0, 0, 0, 0, 0, 0, 0, 0][action]
             if self._isContinuousDownwardEnabled:
@@ -211,8 +211,8 @@ class PandaGraspGymEnv(gym.Env):
         return self._attemptedGrasp or self._envStepCounter >= self._maxSteps
 
     def perform_grasp(self):
-
         anim_length = 500
+        self._panda.updateGripPos()
         self.close_fingers(anim_length)
         self.lift_gripper(anim_length)
         self._attemptedGrasp = True

@@ -1,6 +1,5 @@
 import os
 import robot_data
-import matplotlib.pyplot as plt
 import numpy as np
 from stable_baselines import DQN
 from stable_baselines.bench import Monitor
@@ -45,20 +44,21 @@ def main():
                                  numControlledJoints=7, isTargetPositionFixed=True)
     panda_env = Monitor(panda_env, log_dir, allow_early_resets=True)
 
-    time_steps = 500000
-
-    model = DQN(MlpPolicy, panda_env,
+    time_steps = 600000
+    
+    model = DQN(MlpPolicy,
+                panda_env,
                 verbose=True,
                 tensorboard_log="tensorboard/",
                 gamma=.99,
                 param_noise=False,
                 exploration_fraction=0.1,
                 exploration_final_eps=0.02,
-                learning_rate=1e-3,
-                buffer_size=50000)
+                buffer_size=50000,
+                learning_rate=1e-3)
 
     model.learn(total_timesteps=time_steps, callback=callback, log_interval=1000)
-    model.save("model.pkl")
+    model.save("fixed_pos_target_2_deepq.pkl")
 
 
 if __name__ == '__main__':

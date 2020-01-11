@@ -14,7 +14,7 @@ def main():
                                  numControlledJoints=7, isTargetPositionFixed=True)
     panda_env.render(mode='human')
     obs = panda_env.getExtendedObservation()
-    panda_env._panda.apply_action([.03, 0, -0.22, 0, 0, 0, 1], False)
+    panda_env._panda.apply_action([.2, .27, -0.1999, 0, 0.1, 0, 1], False)
 
     panda_env._p.stepSimulation()
     panda_env.perform_grasp()

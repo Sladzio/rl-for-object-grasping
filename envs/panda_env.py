@@ -20,7 +20,7 @@ class PandaEnv:
         self.useNullSpace = 0
         self.useSimulation = 1
         self.basePosition = basePosition
-        self.workspace_lim = [[0.3, 0.60], [-0.3, 0.3], [0, 1]]
+        self.workspace_lim = [[0.2, 1], [-0.3, 0.3], [0, 1]]
         self.workspace_lim_endEff = [[0.1, 0.70], [-0.4, 0.4], [0.65, 5]]
         self.gripperIndex = 8
         self.numControlledJoints = numControlledJoints
@@ -64,6 +64,12 @@ class PandaEnv:
         observation.extend(list(euler))
         return observation
 
+    def updateGripPos(self):
+        state = p.getLinkState(self.pandaId, self.gripperIndex)
+        self.endEffPos = list(state[0])
+        euler = p.getEulerFromQuaternion(state[1])
+        self.endEffOrn = list(euler)
+
     def apply_action(self, action, useSimulation=True):
         if self.useInverseKinematics:
 
@@ -100,7 +106,6 @@ class PandaEnv:
                                                 jointIndex=i,
                                                 controlMode=p.POSITION_CONTROL,
                                                 targetPosition=joint_poses[i],
-                                                targetVelocity=0,
                                                 force=self.max_force,
                                                 maxVelocity=self.max_velocity,
                                                 positionGain=0.3,
@@ -130,7 +135,6 @@ class PandaEnv:
                                         a,
                                         p.POSITION_CONTROL,
                                         targetPosition=new_motor_pos,
-                                        targetVelocity=0,
                                         positionGain=0.25,
                                         velocityGain=0.75,
                                         force=self.max_force)
