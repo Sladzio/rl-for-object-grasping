@@ -260,7 +260,8 @@ class PandaGraspGymEnv(gym.Env):
             reward -= horizontal_distance * 10
             if horizontal_distance < 0.05:
                 reward -= closestPoints[0][8] * 10
-
+            else:
+                reward -= 10
         if target_obj_pos[2] > 0.7:
             reward = 1000
             print("successfully grasped a block!!!")
