@@ -211,7 +211,7 @@ class PandaGraspGymEnv(gym.Env):
         return self._attemptedGrasp or self._envStepCounter >= self._maxSteps
 
     def perform_grasp(self):
-        anim_length = 500
+        anim_length = 100
         self._panda.updateGripPos()
         self.close_fingers(anim_length)
         self.lift_gripper(anim_length)
@@ -229,7 +229,7 @@ class PandaGraspGymEnv(gym.Env):
 
     def lift_gripper(self, anim_length):
         for i in range(anim_length):
-            grasp_action = [0, 0, 0.001, 0, 0, 0, 0]
+            grasp_action = [0, 0, 0.005, 0, 0, 0, 0]
             self._panda.apply_action(grasp_action)
             p.stepSimulation()
             block_pos, block_orn = p.getBasePositionAndOrientation(self.targetObjectId)
