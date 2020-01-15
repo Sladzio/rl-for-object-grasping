@@ -16,8 +16,8 @@ os.sys.path.insert(0, parent_dir)
 
 
 def main():
-    panda_env = PandaGraspGymEnv(urdfRoot=robot_data.getDataPath(), isRendering=True, useIK=True, isDiscrete=True,
-                                 numControlledJoints=7, isTargetPositionFixed=True)
+    panda_env = PandaGraspGymEnv(urdf_root=robot_data.getDataPath(), is_rendering=True, use_ik=True, is_discrete=True,
+                                 num_controlled_joints=7, is_target_position_fixed=True)
     env = DummyVecEnv([lambda: panda_env])
 
     model = DQN.load("fixed_pos_target_2_deepq.pkl")

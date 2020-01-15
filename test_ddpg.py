@@ -16,8 +16,8 @@ os.sys.path.insert(0, parent_dir)
 
 
 def main():
-    panda_env = PandaGraspGymEnv(urdfRoot=robot_data.getDataPath(), isRendering=True, useIK=True, isDiscrete=False,
-                                 numControlledJoints=7)
+    panda_env = PandaGraspGymEnv(urdf_root=robot_data.getDataPath(), is_rendering=True, use_ik=True, is_discrete=False,
+                                 num_controlled_joints=7)
 
     env = DummyVecEnv([lambda: panda_env])
     param_noise = None
