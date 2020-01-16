@@ -246,7 +246,7 @@ class PandaGraspGymEnv(gym.Env):
             reward = 0
             horizontal_distance = np.linalg.norm(point_a - point_b)
             reward -= horizontal_distance * 10
-            if horizontal_distance < 0.008:
+            if horizontal_distance < 0.002:
                 reward -= closest_points[0][8] * 10
             else:
                 reward -= 10
