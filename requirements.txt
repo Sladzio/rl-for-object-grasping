@@ -1,0 +1,8 @@
+gym
+matplotlib
+pandas
+ruamel.yaml
+tensorflow>=1.8,<=1.15
+stable-baselines
+pybullet
+stable-baselines[mpi]
