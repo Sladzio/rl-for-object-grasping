@@ -1,4 +1,4 @@
-#RL for object grasping by robot (Franka Emika)
+# RL for object grasping by robot (Franka Emika)
 
 
 ## Prerequisites
