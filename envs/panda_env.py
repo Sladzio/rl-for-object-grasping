@@ -28,6 +28,7 @@ class PandaEnv:
         self.panda_id = None
         self.gripper_pos = []  # x,y,z
         self.gripper_orn = []  # roll,pitch,yaw
+
         self.reset()
 
     def reset(self):
@@ -39,6 +40,9 @@ class PandaEnv:
                                     force=self.max_force)
 
         state = p.getLinkState(self.panda_id, self.gripper_index)
+
+        for j in range(p.getNumJoints(self.panda_id)):
+            p.changeDynamics(self.panda_id, j, linearDamping=0, angularDamping=0)
 
         self.gripper_pos = list(state[0])
         self.gripper_orn = list(p.getEulerFromQuaternion(list(state[1])))

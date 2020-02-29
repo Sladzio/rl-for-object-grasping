@@ -230,26 +230,19 @@ class PandaGraspGymEnv(gym.Env):
 
     def _compute_reward(self):
         target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self.target_object_id)
+        gripper_state = p.getLinkState(self._panda.panda_id, self._panda.gripper_index)
+        gripper_pos = gripper_state[0]
 
-        closest_points = p.getClosestPoints(self.target_object_id, self._panda.panda_id, 1000, -1,
-                                            self._panda.gripper_index)
+        point_a = np.array([gripper_pos[0], gripper_pos[1], 0])
+        point_b = np.array([target_obj_pos[0], target_obj_pos[1], 0])
+        reward = 0
+        horizontal_distance = np.linalg.norm(point_a - point_b)
+        reward -= horizontal_distance * 10
+        if horizontal_distance <= .02:
+            reward = - abs(gripper_pos[2] - target_obj_pos[2]) * 10
+        else:
+            reward -= 10
 
-        reward = -1000
-
-        count = len(closest_points)
-
-        if count > 0:
-
-            point_a = np.array([closest_points[0][5][0], closest_points[0][5][1], 0])
-            point_b = np.array([closest_points[0][6][0], closest_points[0][6][1], 0])
-
-            reward = 0
-            horizontal_distance = np.linalg.norm(point_a - point_b)
-            reward -= horizontal_distance * 10
-            if horizontal_distance < 0.003:
-                reward = - abs(closest_points[0][5][2] - closest_points[0][6][2]) * 10
-            else:
-                reward -= 10
         if target_obj_pos[2] > 0.7:
             reward = 10000
             self.successful_grasp_count += 1
