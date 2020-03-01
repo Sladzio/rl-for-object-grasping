@@ -2,6 +2,7 @@ import math as m
 import os
 import pybullet as p
 import robot_data
+import numpy as np
 
 
 class PandaEnv:
@@ -21,14 +22,13 @@ class PandaEnv:
                                       [0.65, 5]]  # Z
         self.gripper_index = 8
         self.num_controlled_joints = num_controlled_joints
-        self.max_force = 200
+        self.max_force = 5 * 240.
         self.max_velocity = .35
         self.start_joint_positions = [0.006, 0.4, -0.01, -1.6, 0.005, 2, -2.4, 0, 0, 0.05, 0.05]
         self.motor_count = len(self.start_joint_positions)
         self.panda_id = None
         self.gripper_pos = []  # x,y,z
         self.gripper_orn = []  # roll,pitch,yaw
-
         self.reset()
 
     def reset(self):
@@ -44,6 +44,15 @@ class PandaEnv:
         for j in range(p.getNumJoints(self.panda_id)):
             p.changeDynamics(self.panda_id, j, linearDamping=0, angularDamping=0)
 
+        c = p.createConstraint(self.panda_id,
+                               9,
+                               self.panda_id,
+                               10,
+                               jointType=p.JOINT_GEAR,
+                               jointAxis=[1, 0, 0],
+                               parentFramePosition=[0, 0, 0],
+                               childFramePosition=[0, 0, 0])
+        p.changeConstraint(c, gearRatio=-1, erp=0.1, maxForce=50)
         self.gripper_pos = list(state[0])
         self.gripper_orn = list(p.getEulerFromQuaternion(list(state[1])))
 
@@ -52,9 +61,11 @@ class PandaEnv:
         state = p.getLinkState(self.panda_id, self.gripper_index)
         pos = state[0]
         orn = state[1]
+
         euler = p.getEulerFromQuaternion(orn)
         observation.extend(list(pos))
         observation.extend(list(euler))
+
         return observation
 
     def update_gripper_pos(self):
@@ -99,10 +110,7 @@ class PandaEnv:
                                                 jointIndex=i,
                                                 controlMode=p.POSITION_CONTROL,
                                                 targetPosition=joint_poses[i],
-                                                force=self.max_force,
-                                                maxVelocity=self.max_velocity,
-                                                positionGain=0.3,
-                                                velocityGain=1)
+                                                force=self.max_force)
             else:
                 for i in range(self.num_controlled_joints):
                     p.resetJointState(self.panda_id, i, joint_poses[i])
@@ -112,12 +120,12 @@ class PandaEnv:
             p.setJointMotorControl2(self.panda_id,
                                     9,
                                     p.POSITION_CONTROL,
-                                    targetPosition=finger_angle * 0.05,
+                                    targetPosition=finger_angle * 0.03 + 0.01,
                                     force=self.finger_force)
             p.setJointMotorControl2(self.panda_id,
                                     10,
                                     p.POSITION_CONTROL,
-                                    targetPosition=finger_angle * 0.05,
+                                    targetPosition=finger_angle * 0.03 + 0.01,
                                     force=self.finger_force)
 
         else:

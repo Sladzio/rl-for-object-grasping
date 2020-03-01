@@ -24,11 +24,12 @@ class PandaGraspGymEnv(gym.Env):
                  num_controlled_joints=7,
                  is_continuous_downward_enabled=False):
 
+        self.grasp_attempts_count = 0
         self.largest_observation_value = 100
         self.largest_action_value = 1
         self.img_height = 720
         self.img_width = 960
-        self.distance_to_grasp = 0.035
+        self.distance_to_grasp = 0.11
         self._is_continuous_downward_enabled = is_continuous_downward_enabled
         self._attempted_grasp = False
         self._num_controlled_joints = num_controlled_joints
@@ -102,8 +103,10 @@ class PandaGraspGymEnv(gym.Env):
         # Randomize start position of object and target.
 
         if self._is_target_position_fixed:
+            target_orn = p.getQuaternionFromEuler([0, 0, np.random.uniform(-np.pi, np.pi)])
             self.target_object_id = p.loadURDF(os.path.join(self._urdf_root, "franka/cube_small.urdf"),
-                                               basePosition=[0.7, 0.25, self._table_height], useFixedBase=False,
+                                               basePosition=[0.7, 0.25, self._table_height], baseOrientation=target_orn,
+                                               useFixedBase=False,
                                                globalScaling=.5)
         else:
             self.target_object_id = p.loadURDF(os.path.join(self._urdf_root, "franka/cube_small.urdf"),
@@ -183,11 +186,9 @@ class PandaGraspGymEnv(gym.Env):
             time.sleep(self._time_step)
 
         self._observation = self.get_extended_observation()
-
-        closest_points = p.getClosestPoints(self.target_object_id, self._panda.panda_id, self.distance_to_grasp, -1,
-                                            self._panda.gripper_index)
-
-        if len(closest_points) > 0:
+        distance = self.get_distance_to_target()
+        if distance <= self.distance_to_grasp:
+            self.grasp_attempts_count += 1
             self.perform_grasp()
 
         reward = self._compute_reward()
@@ -228,20 +229,29 @@ class PandaGraspGymEnv(gym.Env):
             if actual_end_effector_pos[2] > 2:
                 break
 
+    def get_distance(self, point_a, point_b, axis):
+        point_a = np.array([axis[0] * point_a[0], axis[1] * point_a[1], axis[2] * point_a[2]])
+        point_b = np.array([axis[0] * point_b[0], axis[1] * point_b[1], axis[2] * point_b[2]])
+        return np.linalg.norm(point_a - point_b)
+
+    def get_distance_to_target(self):
+        target_obj_pos, _ = p.getBasePositionAndOrientation(self.target_object_id)
+        gripper_state = p.getLinkState(self._panda.panda_id, self._panda.gripper_index)
+        gripper_pos = gripper_state[0]
+        return self.get_distance(gripper_pos, target_obj_pos, [1, 1, 1])
+
     def _compute_reward(self):
-        target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self.target_object_id)
+        target_obj_pos, _ = p.getBasePositionAndOrientation(self.target_object_id)
+        target_obj_pos = target_obj_pos
         gripper_state = p.getLinkState(self._panda.panda_id, self._panda.gripper_index)
         gripper_pos = gripper_state[0]
 
-        point_a = np.array([gripper_pos[0], gripper_pos[1], 0])
-        point_b = np.array([target_obj_pos[0], target_obj_pos[1], 0])
-        reward = 0
-        horizontal_distance = np.linalg.norm(point_a - point_b)
-        reward -= horizontal_distance * 10
-        if horizontal_distance <= .02:
-            reward = - abs(gripper_pos[2] - target_obj_pos[2]) * 10
+        horizontal_distance = self.get_distance(gripper_pos, target_obj_pos, [1, 1, 0])
+        reward = - horizontal_distance * 100
+        if horizontal_distance <= .025:
+            reward = - self.get_distance(gripper_pos, target_obj_pos, [1, 1, 1]) * 100
         else:
-            reward -= 10
+            reward -= 100
 
         if target_obj_pos[2] > 0.7:
             reward = 10000
