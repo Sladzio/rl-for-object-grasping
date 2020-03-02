@@ -20,11 +20,11 @@ def main():
                                  num_controlled_joints=7, is_target_position_fixed=True)
     env = DummyVecEnv([lambda: panda_env])
 
-    model = DQN.load("fixed_pos_target_2_deepq.pkl")
+    model = DQN.load("fixed_pos_deepq_2.pkl")
     obs = env.reset()
 
     for i in range(1000):
-        action, _states = model.predict(obs, deterministic=True)
+        action, _states = model.predict(obs, deterministic=False)
         print("Step: {} Action: {}".format(i, action))
         obs, rewards, done, info = env.step(action)
         env.render(mode='human')

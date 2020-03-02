@@ -17,7 +17,7 @@ class PandaEnv:
         self.workspace_lim = [[0.2, 1],  # X
                               [-0.3, 0.3],  # Y
                               [0, 1]]  # Z
-        self.workspace_lim_gripper = [[0.1, 0.70],  # X
+        self.workspace_lim_gripper = [[0.1, 1],  # X
                                       [-0.4, 0.4],  # Y
                                       [0.65, 5]]  # Z
         self.gripper_index = 8
@@ -61,10 +61,8 @@ class PandaEnv:
         state = p.getLinkState(self.panda_id, self.gripper_index)
         pos = state[0]
         orn = state[1]
-
-        euler = p.getEulerFromQuaternion(orn)
         observation.extend(list(pos))
-        observation.extend(list(euler))
+        observation.extend(list(orn))
 
         return observation
 
@@ -94,9 +92,9 @@ class PandaEnv:
             self.gripper_pos[2] = min(self.workspace_lim_gripper[2][1],
                                       max(self.workspace_lim_gripper[2][0], self.gripper_pos[2] + dz))
 
-            self.gripper_orn[0] = min(m.pi, max(-m.pi, self.gripper_orn[0] + droll))
-            self.gripper_orn[1] = min(m.pi, max(-m.pi, self.gripper_orn[1] + dpitch))
-            self.gripper_orn[2] = min(m.pi, max(-m.pi, self.gripper_orn[2] + dyaw))
+            self.gripper_orn[0] = self.gripper_orn[0] + droll
+            self.gripper_orn[1] = self.gripper_orn[1] + dpitch
+            self.gripper_orn[2] = self.gripper_orn[2] + dyaw
 
             quat_orn = p.getQuaternionFromEuler(self.gripper_orn)
 

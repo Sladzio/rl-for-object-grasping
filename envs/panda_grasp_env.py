@@ -24,6 +24,7 @@ class PandaGraspGymEnv(gym.Env):
                  num_controlled_joints=7,
                  is_continuous_downward_enabled=False):
 
+        self.episode_number = 1
         self.grasp_attempts_count = 0
         self.largest_observation_value = 100
         self.largest_action_value = 1
@@ -124,49 +125,51 @@ class PandaGraspGymEnv(gym.Env):
     def get_extended_observation(self):
         # get robot observations
         self._observation = self._panda.get_observation()
-        gripper_state = p.getLinkState(self._panda.panda_id, self._panda.gripper_index)
-        gripper_pos = gripper_state[0]
-        gripper_orn = gripper_state[1]
-        inv_gripper_pos, inv_gripper_orn = p.invertTransform(gripper_pos, gripper_orn)
-
+        # gripper_state = p.getLinkState(self._panda.panda_id, self._panda.gripper_index)
+        # gripper_pos = gripper_state[0]
+        # gripper_orn = gripper_state[1]
+        # inv_gripper_pos, inv_gripper_orn = p.invertTransform(gripper_pos, gripper_orn)
+        #
         target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self.target_object_id)
-        targetObjPosInGripperSpace, targetObjOrnInGripperSpace = p.multiplyTransforms(inv_gripper_pos, inv_gripper_orn,
-                                                                                      target_obj_pos, target_obj_orn)
-        targetObjEulerInGripperSpace = p.getEulerFromQuaternion(targetObjOrnInGripperSpace)
-
-        # we return the relative x,y position and euler angle of block in gripper space
-        targetObjRelativeToGripper = [targetObjPosInGripperSpace[0], targetObjPosInGripperSpace[1],
-                                      targetObjEulerInGripperSpace[2]]
-
-        self._observation.extend(targetObjRelativeToGripper)
-        # self._observation.extend(list(target_obj_pos))
-        # self._observation.extend(list(target_obj_orn))
+        # targetObjPosInGripperSpace, targetObjOrnInGripperSpace = p.multiplyTransforms(inv_gripper_pos, inv_gripper_orn,
+        #                                                                               target_obj_pos, target_obj_orn)
+        # targetObjEulerInGripperSpace = p.getEulerFromQuaternion(targetObjOrnInGripperSpace)
+        #
+        # # we return the relative x,y position and euler angle of block in gripper space
+        # targetObjRelativeToGripper = [targetObjPosInGripperSpace[0], targetObjPosInGripperSpace[1],
+        #                               targetObjEulerInGripperSpace[2]]
+        #
+        # self._observation.extend(targetObjRelativeToGripper)
+        self._observation.extend(list(target_obj_pos))
+        self._observation.extend(list(target_obj_orn))
 
         return self._observation
 
     def step(self, action):
         if self._is_discrete:
-            dv = 0.001
-            dx = [0, -dv, dv, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][action]
-            dy = [0, 0, 0, -dv, dv, 0, 0, 0, 0, 0, 0, 0, 0][action]
+            delta_pos = 0.001
+            delta_angle = 0.01
+            dx = [0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][action]
+            dy = [0, 0, 0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0, 0, 0][action]
             if self._is_continuous_downward_enabled:
-                dz = -dv
+                dz = -delta_pos
             else:
-                dz = [0, 0, 0, 0, 0, -dv, dv, 0, 0, 0, 0, 0, 0][action]
-            droll = [0, 0, 0, 0, 0, 0, 0, -dv, dv, 0, 0, 0, 0][action]
-            dpitch = [0, 0, 0, 0, 0, 0, 0, 0, 0, -dv, dv, 0, 0][action]
-            dyaw = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -dv, dv][action]
+                dz = [0, 0, 0, 0, 0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0][action]
+
+            droll = [0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle, 0, 0, 0, 0][action]
+            dpitch = [0, 0, 0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle, 0, 0][action]
+            dyaw = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle][action]
             f = 1
             real_action = [dx, dy, dz, droll, dpitch, dyaw, f]
             return self.real_step(real_action)
         else:
-            dv = 1.5
-            dx = action[0] * dv
-            dy = action[1] * dv
-            dz = action[2] * dv
-            droll = action[3] * dv
-            dpitch = action[4] * dv
-            dyaw = action[5] * dv
+            delta_pos = 1.5
+            dx = action[0] * delta_pos
+            dy = action[1] * delta_pos
+            dz = action[2] * delta_pos
+            droll = action[3] * delta_pos
+            dpitch = action[4] * delta_pos
+            dyaw = action[5] * delta_pos
             f = 1
             real_action = [dx, dy, dz, droll, dpitch, dyaw, f]
             return self.real_step(real_action)
@@ -193,6 +196,9 @@ class PandaGraspGymEnv(gym.Env):
 
         reward = self._compute_reward()
         done = self._termination()
+
+        if done:
+            self.episode_number += 1
 
         return np.array(self._observation), reward, done, {}
 
@@ -251,10 +257,10 @@ class PandaGraspGymEnv(gym.Env):
         if horizontal_distance <= .025:
             reward = - self.get_distance(gripper_pos, target_obj_pos, [1, 1, 1]) * 100
         else:
-            reward -= 100
+            reward -= 200
 
         if target_obj_pos[2] > 0.7:
-            reward = 10000
+            reward = 100000
             self.successful_grasp_count += 1
             print("successfully grasped a block!!!")
         return reward
