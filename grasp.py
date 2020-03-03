@@ -10,14 +10,12 @@ os.sys.path.insert(0, parent_dir)
 
 
 def main():
-    panda_env = PandaGraspGymEnv(urdfRoot=robot_data.getDataPath(), isRendering=True, useIK=True, isDiscrete=True,
-                                 numControlledJoints=7, isTargetPositionFixed=True)
+    panda_env = PandaGraspGymEnv(urdf_root=robot_data.getDataPath(), is_rendering=True, use_ik=True, is_discrete=True,
+                                 num_controlled_joints=7, is_target_position_fixed=True)
     panda_env.render(mode='human')
-    obs = panda_env.getExtendedObservation()
-    panda_env._panda.apply_action([.03, 0, -0.22, 0, 0, 0, 1], False)
-
-    panda_env._p.stepSimulation()
-    panda_env.perform_grasp()
+    obs = panda_env.get_extended_observation()
+    panda_env._panda.apply_action([.2, .27, -0.19, 0, 0.1, 0, 1], False)
+    panda_env.step(0)
     while (True):
         panda_env._p.stepSimulation()
 

@@ -45,8 +45,8 @@ def callback(_locals, _globals):
 
 def main():
     os.makedirs(log_dir, exist_ok=True)
-    panda_env = PandaGraspGymEnv(urdfRoot=robot_data.getDataPath(), isRendering=False, useIK=True, isDiscrete=False,
-                                 numControlledJoints=7)
+    panda_env = PandaGraspGymEnv(urdf_root=robot_data.getDataPath(), is_rendering=False, use_ik=True, is_discrete=False,
+                                 num_controlled_joints=7)
     panda_env = Monitor(panda_env, log_dir, allow_early_resets=True)
 
     param_noise = None

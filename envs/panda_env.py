@@ -1,71 +1,79 @@
-import os, inspect
+import math as m
+import os
 import pybullet as p
 import robot_data
-import math as m
-
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(os.path.dirname(currentdir))
-os.sys.path.insert(0, parentdir)
+import numpy as np
 
 
 class PandaEnv:
 
-    def __init__(self, urdfRootPath=robot_data.getDataPath(), timeStep=0.01, useInverseKinematics=0,
-                 basePosition=[-0.6, -0.4, 0.625], numControlledJoints=7):
-        self.fingerAForce = 10
-        self.fingerBForce = 10
-        self.urdfRootPath = os.path.join(urdfRootPath, "franka/robot/panda.urdf")
-        self.timeStep = timeStep
-        self.useInverseKinematics = useInverseKinematics
-        self.useNullSpace = 0
-        self.useSimulation = 1
-        self.basePosition = basePosition
-        self.workspace_lim = [[0.3, 0.60], [-0.3, 0.3], [0, 1]]
-        self.workspace_lim_endEff = [[0.1, 0.70], [-0.4, 0.4], [0.65, 5]]
-        self.gripperIndex = 8
-        self.numControlledJoints = numControlledJoints
-        self.max_force = 200
+    def __init__(self, base_position, urdf_root_path=robot_data.getDataPath(), time_step=0.01, use_ik=False,
+                 num_controlled_joints=7):
+        self.finger_force = 10
+        self.urdf_root_path = os.path.join(urdf_root_path, "franka/robot/panda.urdf")
+        self.time_step = time_step
+        self.use_ik = use_ik
+        self.base_position = base_position
+        self.workspace_lim = [[0.2, 1],  # X
+                              [-0.3, 0.3],  # Y
+                              [0, 1]]  # Z
+        self.workspace_lim_gripper = [[0.1, 1],  # X
+                                      [-0.4, 0.4],  # Y
+                                      [0.65, 5]]  # Z
+        self.gripper_index = 8
+        self.num_controlled_joints = num_controlled_joints
+        self.max_force = 5 * 240.
         self.max_velocity = .35
-        self.jointPositions = [
-            0.006, 0.4, -0.01, -1.6, 0.005, 2, -2.4, 0, 0, 0.05, 0.05
-        ]
+        self.start_joint_positions = [0.006, 0.4, -0.01, -1.6, 0.005, 2, -2.4, 0, 0, 0.05, 0.05]
+        self.motor_count = len(self.start_joint_positions)
+        self.panda_id = None
+        self.gripper_pos = []  # x,y,z
+        self.gripper_orn = []  # roll,pitch,yaw
         self.reset()
 
     def reset(self):
-        # load model and position it's base on base position
-        self.pandaId = p.loadURDF(self.urdfRootPath, basePosition=self.basePosition, useFixedBase=True)
-        for i in range(11):
-            p.resetJointState(self.pandaId, i, self.jointPositions[i])
-            p.setJointMotorControl2(self.pandaId, i, p.POSITION_CONTROL, targetPosition=self.jointPositions[i],
+        self.panda_id = p.loadURDF(self.urdf_root_path, basePosition=self.base_position, useFixedBase=True)
+
+        for i in range(self.motor_count):
+            p.resetJointState(self.panda_id, i, self.start_joint_positions[i])
+            p.setJointMotorControl2(self.panda_id, i, p.POSITION_CONTROL, targetPosition=self.start_joint_positions[i],
                                     force=self.max_force)
 
-        state = p.getLinkState(self.pandaId, self.gripperIndex)
+        state = p.getLinkState(self.panda_id, self.gripper_index)
 
-        self.endEffPos = list(state[0])  # x,y,z
-        self.endEffOrn = list(p.getEulerFromQuaternion(list(state[1])))  # roll,pitch,yaw
+        for j in range(p.getNumJoints(self.panda_id)):
+            p.changeDynamics(self.panda_id, j, linearDamping=0, angularDamping=0)
 
-    def getJointsRanges(self):
-        # to-be-defined
-        return 0
+        c = p.createConstraint(self.panda_id,
+                               9,
+                               self.panda_id,
+                               10,
+                               jointType=p.JOINT_GEAR,
+                               jointAxis=[1, 0, 0],
+                               parentFramePosition=[0, 0, 0],
+                               childFramePosition=[0, 0, 0])
+        p.changeConstraint(c, gearRatio=-1, erp=0.1, maxForce=50)
+        self.gripper_pos = list(state[0])
+        self.gripper_orn = list(p.getEulerFromQuaternion(list(state[1])))
 
-    def getActionDimension(self):
-        return self.numControlledJoints
-
-    def getObservationDimension(self):
-        return len(self.getObservation())
-
-    def getObservation(self):
+    def get_observation(self):
         observation = []
-        state = p.getLinkState(self.pandaId, self.gripperIndex)
+        state = p.getLinkState(self.panda_id, self.gripper_index)
         pos = state[0]
         orn = state[1]
-        euler = p.getEulerFromQuaternion(orn)
         observation.extend(list(pos))
-        observation.extend(list(euler))
+        observation.extend(list(orn))
+
         return observation
 
-    def apply_action(self, action, useSimulation=True):
-        if self.useInverseKinematics:
+    def update_gripper_pos(self):
+        state = p.getLinkState(self.panda_id, self.gripper_index)
+        self.gripper_pos = list(state[0])
+        euler = p.getEulerFromQuaternion(state[1])
+        self.gripper_orn = list(euler)
+
+    def apply_action(self, action, use_simulation=True):
+        if self.use_ik:
 
             dx = action[0]
             dy = action[1]
@@ -77,60 +85,55 @@ class PandaEnv:
 
             finger_angle = action[6]
 
-            self.endEffPos[0] = min(self.workspace_lim_endEff[0][1],
-                                    max(self.workspace_lim_endEff[0][0], self.endEffPos[0] + dx))
-            self.endEffPos[1] = min(self.workspace_lim_endEff[1][1],
-                                    max(self.workspace_lim_endEff[1][0], self.endEffPos[1] + dy))
-            self.endEffPos[2] = min(self.workspace_lim_endEff[2][1],
-                                    max(self.workspace_lim_endEff[2][0], self.endEffPos[2] + dz))
+            self.gripper_pos[0] = min(self.workspace_lim_gripper[0][1],
+                                      max(self.workspace_lim_gripper[0][0], self.gripper_pos[0] + dx))
+            self.gripper_pos[1] = min(self.workspace_lim_gripper[1][1],
+                                      max(self.workspace_lim_gripper[1][0], self.gripper_pos[1] + dy))
+            self.gripper_pos[2] = min(self.workspace_lim_gripper[2][1],
+                                      max(self.workspace_lim_gripper[2][0], self.gripper_pos[2] + dz))
 
-            self.endEffOrn[0] = min(m.pi, max(-m.pi, self.endEffOrn[0] + droll))
-            self.endEffOrn[1] = min(m.pi, max(-m.pi, self.endEffOrn[1] + dpitch))
-            self.endEffOrn[2] = min(m.pi, max(-m.pi, self.endEffOrn[2] + dyaw))
+            self.gripper_orn[0] = self.gripper_orn[0] + droll
+            self.gripper_orn[1] = self.gripper_orn[1] + dpitch
+            self.gripper_orn[2] = self.gripper_orn[2] + dyaw
 
-            quat_orn = p.getQuaternionFromEuler(self.endEffOrn)
+            quat_orn = p.getQuaternionFromEuler(self.gripper_orn)
 
-            joint_poses = p.calculateInverseKinematics(self.pandaId, self.gripperIndex, self.endEffPos, quat_orn)
+            joint_poses = p.calculateInverseKinematics(self.panda_id, self.gripper_index, self.gripper_pos, quat_orn)
 
-            if useSimulation:
-                for i in range(self.numControlledJoints):
-                    joint_info = p.getJointInfo(self.pandaId, i)
+            if use_simulation:
+                for i in range(self.num_controlled_joints):
+                    joint_info = p.getJointInfo(self.panda_id, i)
                     if joint_info[3] > -1:
-                        p.setJointMotorControl2(bodyUniqueId=self.pandaId,
+                        p.setJointMotorControl2(bodyUniqueId=self.panda_id,
                                                 jointIndex=i,
                                                 controlMode=p.POSITION_CONTROL,
                                                 targetPosition=joint_poses[i],
-                                                targetVelocity=0,
-                                                force=self.max_force,
-                                                maxVelocity=self.max_velocity,
-                                                positionGain=0.3,
-                                                velocityGain=1)
+                                                force=self.max_force)
             else:
-                for i in range(self.numControlledJoints):
-                    p.resetJointState(self.pandaId, i, joint_poses[i])
+                for i in range(self.num_controlled_joints):
+                    p.resetJointState(self.panda_id, i, joint_poses[i])
 
             # fingers
 
-            p.setJointMotorControl2(self.pandaId,
+            p.setJointMotorControl2(self.panda_id,
                                     9,
                                     p.POSITION_CONTROL,
-                                    targetPosition=finger_angle * 0.05,
-                                    force=self.fingerAForce)
-            p.setJointMotorControl2(self.pandaId,
+                                    targetPosition=finger_angle * 0.03 + 0.01,
+                                    force=self.finger_force)
+            p.setJointMotorControl2(self.panda_id,
                                     10,
                                     p.POSITION_CONTROL,
-                                    targetPosition=finger_angle * 0.05,
-                                    force=self.fingerBForce)
+                                    targetPosition=finger_angle * 0.03 + 0.01,
+                                    force=self.finger_force)
 
         else:
             for a in range(len(action)):
-                curr_motor_pos = p.getJointState(self.pandaId, a)[0]
-                new_motor_pos = curr_motor_pos + action[a]  # supposed to be a delta
-                p.setJointMotorControl2(self.pandaId,
+                curr_motor_pos = p.getJointState(self.panda_id, a)[0]
+                new_motor_pos = curr_motor_pos + action[a]
+                p.setJointMotorControl2(self.panda_id,
                                         a,
                                         p.POSITION_CONTROL,
                                         targetPosition=new_motor_pos,
-                                        targetVelocity=0,
                                         positionGain=0.25,
                                         velocityGain=0.75,
                                         force=self.max_force)
