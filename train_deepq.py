@@ -6,12 +6,14 @@ from stable_baselines.bench import Monitor
 from stable_baselines.deepq.policies import MlpPolicy, LnMlpPolicy
 from stable_baselines.results_plotter import load_results, ts2xy
 from envs import PandaGraspGymEnv
+from stable_baselines.common.callbacks import EvalCallback, StopTrainingOnSuccessThreshold
+from stable_baselines.common.vec_env import DummyVecEnv
 
 best_mean_reward, n_steps = -np.inf, 0
 log_dir = "tmp/"
 
 
-def callback(_locals, _globals):
+def status_callback(_locals, _globals):
     """
     Callback called at each step
     :param _locals: (dict)
@@ -27,24 +29,34 @@ def callback(_locals, _globals):
         episode = panda_env.episode_number
         if len(x) > 0:
             mean_reward = np.mean(y[-100:])
-            print(x[-1], 'timesteps')
             print(
-                "Best mean reward: {:.2f} - Last mean reward per episode: {:.2f} Succesful grasps: {} Attempted grasps: {} Episode: {}".format(
-                    best_mean_reward, mean_reward, successful_grasps, grasp_attempts, episode))
+                "TimeSteps: {} Best mean reward: {:.2f} - Last mean reward per episode: {:.2f} Succesful grasps: {} Attempted grasps: {} Episode: {}".format(
+                    x[-1], best_mean_reward, mean_reward, successful_grasps, grasp_attempts, episode))
 
             # New best model, you could save the agent here
             if mean_reward > best_mean_reward:
                 best_mean_reward = mean_reward
-                print("Saving model")
-                _locals['self'].save(log_dir + 'best_model.pkl')
     n_steps += 1
     return True
 
 
 os.makedirs(log_dir, exist_ok=True)
-panda_env = PandaGraspGymEnv(urdf_root=robot_data.getDataPath(), is_rendering=False, use_ik=True, is_discrete=True,
-                             num_controlled_joints=7, is_target_position_fixed=True)
-panda_env = Monitor(panda_env, log_dir, allow_early_resets=True)
+
+
+def get_environment():
+    env = PandaGraspGymEnv(urdf_root=robot_data.getDataPath(), is_rendering=False, use_ik=True, is_discrete=True,
+                           num_controlled_joints=7, is_target_position_fixed=True)
+    env = DummyVecEnv([lambda: env])
+    return env
+
+
+panda_env = get_environment()
+eval_env = get_environment()
+
+callback_on_best = StopTrainingOnSuccessThreshold(success_rate_goal=0.9, verbose=1)
+eval_callback = EvalCallback(eval_env, best_model_save_path='./logs/',
+                             log_path='./logs/', eval_freq=10000,
+                             deterministic=True, render=False, callback_on_new_best=callback_on_best, n_eval_episodes=1)
 
 time_steps = 1000000
 
@@ -54,10 +66,10 @@ model = DQN(MlpPolicy,
             tensorboard_log="tensorboard/",
             gamma=.99,
             param_noise=False,
-            exploration_fraction=0.1,
+            exploration_fraction=0.2,
             exploration_final_eps=0.02,
             buffer_size=50000,
             learning_rate=0.001)
 
-model.learn(total_timesteps=time_steps, callback=callback, log_interval=1000)
-model.save("fixed_pos_deepq_2.pkl")
+model.learn(total_timesteps=time_steps, callback=eval_callback, log_interval=10)
+model.save("result")
