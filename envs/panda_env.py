@@ -14,12 +14,12 @@ class PandaEnv:
         self.time_step = time_step
         self.use_ik = use_ik
         self.base_position = base_position
-        self.workspace_lim = [[0.2, 1],  # X
+        self.workspace_lim = [[0.3, 0.7],  # X
                               [-0.3, 0.3],  # Y
                               [0, 1]]  # Z
         self.workspace_lim_gripper = [[0.1, 1],  # X
                                       [-0.4, 0.4],  # Y
-                                      [0.65, 5]]  # Z
+                                      [0.65, 1]]  # Z
         self.gripper_index = 8
         self.num_controlled_joints = num_controlled_joints
         self.max_force = 5 * 240.
@@ -58,11 +58,13 @@ class PandaEnv:
 
     def get_observation(self):
         observation = []
-        state = p.getLinkState(self.panda_id, self.gripper_index)
+        state = p.getLinkState(self.panda_id, self.gripper_index, computeLinkVelocity=True)
         pos = state[0]
-        orn = state[1]
+        velL = state[6]
+        velA = state[7]
         observation.extend(list(pos))
-        observation.extend(list(orn))
+        observation.extend(list(velL))
+        observation.extend(list(velA))
 
         return observation
 
@@ -85,12 +87,9 @@ class PandaEnv:
 
             finger_angle = action[6]
 
-            self.gripper_pos[0] = min(self.workspace_lim_gripper[0][1],
-                                      max(self.workspace_lim_gripper[0][0], self.gripper_pos[0] + dx))
-            self.gripper_pos[1] = min(self.workspace_lim_gripper[1][1],
-                                      max(self.workspace_lim_gripper[1][0], self.gripper_pos[1] + dy))
-            self.gripper_pos[2] = min(self.workspace_lim_gripper[2][1],
-                                      max(self.workspace_lim_gripper[2][0], self.gripper_pos[2] + dz))
+            self.gripper_pos[0] = self.gripper_pos[0] + dx
+            self.gripper_pos[1] = self.gripper_pos[1] + dy
+            self.gripper_pos[2] = self.gripper_pos[2] + dz
 
             self.gripper_orn[0] = self.gripper_orn[0] + droll
             self.gripper_orn[1] = self.gripper_orn[1] + dpitch

@@ -291,6 +291,7 @@ class EvalCallback(EventCallback):
     def _on_step(self) -> bool:
 
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
+            print("----EVALUATION-----")
             # Sync training and eval env if there is VecNormalize
             sync_envs_normalization(self.training_env, self.eval_env)
 
@@ -379,7 +380,7 @@ class StopTrainingOnSuccessThreshold(BaseCallback):
         assert self.parent is not None, ("`StopTrainingOnRewardThreshold` callback must be used "
                                          "with an `EvalCallback`")
         # Convert np.bool to bool, otherwise callback.on_step() is False won't work
-        continue_training = bool(self.parent.success_rate < self.success_rate_goal)
+        continue_training = bool(self.parent.success_rate <= self.success_rate_goal)
         if self.verbose > 0 and not continue_training:
             print("Stopping training because the mean reward {:.2f} "
                   " is above the threshold {}".format(self.parent.best_mean_reward, self.reward_threshold))

@@ -17,13 +17,13 @@ os.sys.path.insert(0, parent_dir)
 
 def main():
     panda_env = PandaGraspGymEnv(urdf_root=robot_data.getDataPath(), is_rendering=True, use_ik=True, is_discrete=True,
-                                 num_controlled_joints=7, is_target_position_fixed=True)
+                                 num_controlled_joints=7, is_target_position_fixed=False)
     env = DummyVecEnv([lambda: panda_env])
 
-    model = DQN.load("result.zip")
+    model = DQN.load("logs/best_model.zip")
 
     episode_rewards, episode_lengths, episode_success = evaluate_policy(model, env,
-                                                                        n_eval_episodes=1,
+                                                                        n_eval_episodes=5,
                                                                         render=True,
                                                                         deterministic=True,
                                                                         return_episode_rewards=True)
@@ -31,6 +31,6 @@ def main():
         "Final Reward {}, Episode Length{}, Success Rate {}".format(np.mean(episode_rewards), np.mean(episode_lengths),
                                                                     np.mean(episode_success)))
 
-
+    model.save()
 if __name__ == '__main__':
     main()
