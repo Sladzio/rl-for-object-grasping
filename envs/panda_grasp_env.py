@@ -136,7 +136,7 @@ class PandaGraspGymEnv(gym.Env):
 
     def step(self, action):
         if self._is_discrete:
-            delta_pos = 0.005
+            delta_pos = 0.01
             delta_angle = 0.01
             dx = [0, -delta_pos, delta_pos, 0, 0, 0, 0][action]
             dy = [0, 0, 0, -delta_pos, delta_pos, 0, 0][action]
@@ -164,20 +164,16 @@ class PandaGraspGymEnv(gym.Env):
             return self.real_step(real_action)
 
     def real_step(self, action):
-
-        for i in range(self._action_repeat_amount):
-            self._panda.apply_action(action)
-            p.stepSimulation()
-            if self._termination():
-                break
-            self._env_step_counter += 1
+        self._panda.apply_action(action)
+        p.stepSimulation()
+        self._env_step_counter += 1
 
         if self._is_rendering:
             time.sleep(self._time_step)
 
         self._observation = self.get_extended_observation()
 
-        distance = self.get_distance_to_target()
+        distance = self.get_vertical_distance_to_target()
 
         if distance <= self.distance_to_grasp:
             self.grasp_attempts_count += 1
@@ -185,7 +181,15 @@ class PandaGraspGymEnv(gym.Env):
             self._observation = self.get_extended_observation()
 
         reward = self._compute_reward()
-        done = self._termination()
+
+        done = self.is_successful_grasp()
+
+        if self.successful_grasp:
+            done = True
+            reward += 10000
+
+        elif self._env_step_counter >= self._max_step_count or self._attempted_grasp:
+            done = True
 
         if done:
             self.episode_number += 1
@@ -208,7 +212,7 @@ class PandaGraspGymEnv(gym.Env):
             grasp_action = [0, 0, 0, 0, 0, 0, finger_angle]
             self._panda.apply_action(grasp_action)
             p.stepSimulation()
-            finger_angle -= 1 / anim_length;
+            finger_angle -= 1 / anim_length
             if finger_angle < 0:
                 finger_angle = 0
 
@@ -245,28 +249,28 @@ class PandaGraspGymEnv(gym.Env):
         gripper_pos = self.get_gripper_pos()
         return self.get_distance(gripper_pos, target_obj_pos, [0, 0, 1])
 
-    def _compute_reward(self):
+    def is_successful_grasp(self):
         target_obj_pos = self.get_target_pos()
         if self._attempted_grasp:
             if target_obj_pos[2] > 0.7:
-
                 self.successful_grasp = True
                 self.successful_grasp_count += 1
                 print(
                     "Successfully grasped a block!!! Timestep: {} Episode: {}, Grasp Count: {} Attempted Grasps: {} ".format(
                         self._env_step_counter, self.episode_number, self.successful_grasp_count,
                         self.grasp_attempts_count))
-                return 10000
-            else:
-                return -100
+                return True
+        return False
+
+    def _compute_reward(self):
+        horizontal_distance = self.get_horizontal_distance_to_target()
+        reward = -horizontal_distance * 10
+        if horizontal_distance <= 0.03:
+            reward = -(self.get_distance_to_target() * 10)
         else:
-            horizontal_distance = self.get_horizontal_distance_to_target()
-            # reward = -self.get_distance_to_target() * 100
-            reward = - horizontal_distance * 10
-            if horizontal_distance <= .025:
-                reward -= (self.get_vertical_distance_to_target() * 10)
-            else:
-                reward -= 10
+            reward -= 10
+
+        # print("Horizonal {}, Veritcal {}, Reward {}".format(horizontal_distance, vertical_distance, reward))
 
         return reward
 

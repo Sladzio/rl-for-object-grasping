@@ -33,18 +33,18 @@ eval_callback = EvalCallback(eval_env, best_model_save_path='./logs/',
 
 tensorboard_callback = TensorboardCallback(log_dir)
 
-time_steps = 2000000
-
+time_steps = 10000000
+seed = 100
 model = DQN(MlpPolicy,
             panda_env,
             verbose=True,
             tensorboard_log="tensorboard/",
             gamma=.99,
             param_noise=False,
-            exploration_fraction=0.2,
+            exploration_fraction=0.1,
             exploration_final_eps=0.02,
             learning_rate=0.001,
-            prioritized_replay=False)
+            prioritized_replay=False, seed=seed)
 
 model.learn(total_timesteps=time_steps, callback=[eval_callback, tensorboard_callback], log_interval=10)
 model.save("result")
