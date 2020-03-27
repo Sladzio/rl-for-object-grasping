@@ -35,12 +35,12 @@ tensorboard_callback = TensorboardCallback(log_dir)
 
 time_steps = 10000000
 seed = 100
-model = DQN(MlpPolicy,
+model = DQN(LnMlpPolicy,
             panda_env,
             verbose=True,
             tensorboard_log="tensorboard/",
             gamma=.99,
-            param_noise=False,
+            param_noise=True,
             exploration_fraction=0.1,
             exploration_final_eps=0.02,
             learning_rate=0.001,
