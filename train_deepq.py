@@ -6,7 +6,7 @@ from stable_baselines.bench import Monitor
 from stable_baselines.deepq.policies import MlpPolicy, LnMlpPolicy
 from stable_baselines.results_plotter import load_results, ts2xy
 from envs import PandaGraspGymEnv
-from stable_baselines.common.callbacks import EvalCallback, StopTrainingOnSuccessThreshold
+from stable_baselines.common.callbacks import EvalCallback, StopTrainingOnSuccessThreshold, CheckpointCallback
 from stable_baselines.common.vec_env import DummyVecEnv
 from custom_callbacks import TensorboardCallback
 
@@ -25,11 +25,12 @@ def get_environment():
 panda_env = Monitor(get_environment(), log_dir)
 eval_env = get_environment()
 
-callback_on_best = StopTrainingOnSuccessThreshold(success_rate_goal=0.8, verbose=1)
 eval_callback = EvalCallback(eval_env, best_model_save_path='./logs/',
                              log_path='./logs/', eval_freq=100000,
-                             deterministic=True, render=False, callback_on_new_best=callback_on_best,
+                             deterministic=True, render=False,
                              n_eval_episodes=10)
+
+every_n_steps_callback = CheckpointCallback(50000, "./logs/")
 
 tensorboard_callback = TensorboardCallback(log_dir)
 
@@ -46,5 +47,6 @@ model = DQN(LnMlpPolicy,
             learning_rate=0.001,
             prioritized_replay=False, seed=seed)
 
-model.learn(total_timesteps=time_steps, callback=[eval_callback, tensorboard_callback], log_interval=10)
+model.learn(total_timesteps=time_steps, callback=[eval_callback, tensorboard_callback, every_n_steps_callback],
+            log_interval=10)
 model.save("result")

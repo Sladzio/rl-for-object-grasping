@@ -265,7 +265,7 @@ class PandaGraspGymEnv(gym.Env):
     def _compute_reward(self):
         horizontal_distance = self.get_horizontal_distance_to_target()
         reward = -horizontal_distance * 10
-        if horizontal_distance <= 0.03:
+        if horizontal_distance <= 0.025:
             reward = -(self.get_distance_to_target() * 10)
         else:
             reward -= 10

@@ -23,8 +23,8 @@ def main():
     model = DQN.load("logs/best_model.zip")
 
     episode_rewards, episode_lengths, episode_success = evaluate_policy(model, env,
-                                                                        n_eval_episodes=5,
-                                                                        render=True,
+                                                                        n_eval_episodes=10,
+                                                                        render=False,
                                                                         deterministic=True,
                                                                         return_episode_rewards=True)
     print(
