@@ -1,5 +1,7 @@
 import os
 import time
+from collections import OrderedDict
+
 import gym
 import numpy as np
 import pybullet as p
@@ -9,7 +11,7 @@ import robot_data
 from . import PandaEnv
 
 
-class PandaGraspGymEnv(gym.Env):
+class PandaGraspGymEnv(gym.GoalEnv):
     metadata = {'render.modes': ['human', 'rgb_array'],
                 'video.frames_per_second': 50}
 
@@ -22,15 +24,16 @@ class PandaGraspGymEnv(gym.Env):
                  max_step_count=1000,
                  is_target_position_fixed=False,
                  num_controlled_joints=7,
-                 is_continuous_downward_enabled=False):
+                 is_continuous_downward_enabled=False,
+                 reward_type='dense'):
 
-        self.episode_number = 1
-        self.grasp_attempts_count = 0
-        self.largest_observation_value = 1
-        self.largest_action_value = 1
-        self.img_height = 720
-        self.img_width = 960
-        self.distance_to_grasp = 0.11
+        self._episode_number = 1
+        self._grasp_attempts_count = 0
+        self._largest_observation_value = 1
+        self._largest_action_value = 1
+        self._img_height = 720
+        self._img_width = 960
+        self._distance_to_grasp = 0.11
         self._is_continuous_downward_enabled = is_continuous_downward_enabled
         self._attempted_grasp = False
         self._num_controlled_joints = num_controlled_joints
@@ -50,10 +53,14 @@ class PandaGraspGymEnv(gym.Env):
         self._table_height = 0
         self._p = p
         self._is_target_position_fixed = is_target_position_fixed
-        self.successful_grasp_count = 0
+        self._successful_grasp_count = 0
         self._panda = None
-        self.target_object_id = None
-        self.successful_grasp = False
+        self._reward_type = reward_type
+        self._target_object_id = None
+        self._is_successful_grasp = False
+        self._goal_position = None
+        self.lift_distance = 0.04
+        self._distance_threshold = 0.01
 
         if self._is_discrete:
             self.action_space = 7
@@ -68,55 +75,58 @@ class PandaGraspGymEnv(gym.Env):
             p.connect(p.DIRECT)
         self.reset()
 
-        observation_dim = len(self.get_extended_observation())
-        observation_high = np.array([self.largest_observation_value] * observation_dim)
-        self.observation_space = spaces.Box(-observation_high, observation_high, dtype='float32')
+        obs = self.get_extended_observation()
+        self.observation_space = spaces.Dict(dict(
+            desired_goal=spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
+            achieved_goal=spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
+            observation=spaces.Box(-np.inf, np.inf, shape=obs['observation'].shape, dtype='float32'),
+        ))
 
         if self._is_discrete:
             self.action_space = spaces.Discrete(self.action_space)
 
         else:
-            action_high = np.array([self.largest_action_value] * self.action_space)
+            action_high = np.array([self._largest_action_value] * self.action_space)
             self.action_space = spaces.Box(-action_high, action_high, dtype='float32')
         if self._is_rendering:
             base_pos, orn = self._p.getBasePositionAndOrientation(self._panda.panda_id)
             p.resetDebugVisualizerCamera(self._cam_dist, self._cam_yaw, self._cam_pitch, base_pos)
 
     def reset(self):
-        self.successful_grasp = False
+        self._is_successful_grasp = False
         self._terminated = False
         self._attempted_grasp = False
         self._env_step_counter = 0
         p.resetSimulation()
         p.setPhysicsEngineParameter(numSolverIterations=150)
         p.setTimeStep(self._time_step)
-
         p.loadURDF(os.path.join(pybullet_data.getDataPath(), "plane.urdf"), useFixedBase=True)
-        # Load robot
+
         self._panda = PandaEnv([0, 0, 0.625], self._urdf_root, time_step=self._time_step,
                                use_ik=self._use_ik, num_controlled_joints=self._num_controlled_joints)
 
-        # Load table and object for simulation
         table_id = p.loadURDF(os.path.join(self._urdf_root, "franka/table.urdf"), useFixedBase=True)
 
         table_info = p.getVisualShapeData(table_id, -1)[0]
 
         self._table_height = table_info[5][2] + table_info[3][2] + 0.01
 
-        # limit panda workspace to table plane
         self._panda.workspace_lim[2][0] = self._table_height
-        # Randomize start position of object and target.
 
         if self._is_target_position_fixed:
             target_orn = p.getQuaternionFromEuler([0, 0, np.random.uniform(-np.pi, np.pi)])
-            self.target_object_id = p.loadURDF(os.path.join(self._urdf_root, "franka/cube_small.urdf"),
-                                               basePosition=[0.7, 0.25, self._table_height], baseOrientation=target_orn,
-                                               useFixedBase=False,
-                                               globalScaling=.5)
+            self._target_object_id = p.loadURDF(os.path.join(self._urdf_root, "franka/cube_small.urdf"),
+                                                basePosition=[0.7, 0.25, self._table_height],
+                                                baseOrientation=target_orn,
+                                                useFixedBase=False,
+                                                globalScaling=.5)
+            self._goal_position = [0.7, 0.25, self._table_height + self.lift_distance]
         else:
-            self.target_object_id = p.loadURDF(os.path.join(self._urdf_root, "franka/cube_small.urdf"),
-                                               basePosition=self._sample_pose(), useFixedBase=False,
-                                               globalScaling=.5)
+            pos = self._sample_pose()
+            self._target_object_id = p.loadURDF(os.path.join(self._urdf_root, "franka/cube_small.urdf"),
+                                                basePosition=pos, useFixedBase=False,
+                                                globalScaling=.5)
+            self._goal_position = np.add(pos, [0, 0, self.lift_distance])
 
         p.setGravity(0, 0, -9.8)
 
@@ -124,15 +134,20 @@ class PandaGraspGymEnv(gym.Env):
 
         self._observation = self.get_extended_observation()
 
-        return np.array(self._observation)
+        return self._observation
 
     def get_extended_observation(self):
-        # get robot observations
-        self._observation = self._panda.get_observation()
-        target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self.target_object_id)
-        self._observation.extend(list(target_obj_pos))
-
-        return self._observation
+        observation = self._panda.get_observation()
+        target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self._target_object_id)
+        achieved_goal = list(target_obj_pos)
+        observation.extend(achieved_goal)
+        observation.extend(list(target_obj_orn))
+        observation.extend(self._goal_position)
+        return {
+            'observation': np.asarray(observation.copy()),
+            'achieved_goal': np.asarray(achieved_goal.copy()),
+            'desired_goal': np.asarray(self._goal_position.copy())
+        }
 
     def step(self, action):
         if self._is_discrete:
@@ -175,29 +190,31 @@ class PandaGraspGymEnv(gym.Env):
 
         distance = self.get_vertical_distance_to_target()
 
-        if distance <= self.distance_to_grasp:
-            self.grasp_attempts_count += 1
+        if distance <= self._distance_to_grasp:
+            self._grasp_attempts_count += 1
             self.perform_grasp()
             self._observation = self.get_extended_observation()
 
-        reward = self._compute_reward()
+        info = {
+            'is_success': self._is_success(self._observation['achieved_goal'], self._observation['desired_goal'])}
 
-        done = self.is_successful_grasp()
+        if info['is_success']:
+            self._is_successful_grasp = True
+            self._successful_grasp_count += 1
+            print(
+                "Successfully grasped a block!!! Timestep: {} Episode: {}, Grasp Count: {} Attempted Grasps: {} ".format(
+                    self._env_step_counter, self._episode_number, self._successful_grasp_count,
+                    self._grasp_attempts_count))
+        reward = self.compute_reward(self._observation['achieved_goal'], self._goal_position, info)
 
-        if self.successful_grasp:
-            done = True
-            reward += 10000
-
-        elif self._env_step_counter >= self._max_step_count or self._attempted_grasp:
-            done = True
-
+        done = self._termination()
         if done:
-            self.episode_number += 1
+            self._episode_number += 1
 
-        return np.array(self._observation), reward, done, {"is_success": self.successful_grasp}
+        return self._observation, reward, done, info
 
     def _termination(self):
-        return self._attempted_grasp or self._env_step_counter >= self._max_step_count or self.successful_grasp
+        return self._is_successful_grasp or self._env_step_counter >= self._max_step_count or self._attempted_grasp
 
     def perform_grasp(self):
         anim_length = 100
@@ -221,12 +238,12 @@ class PandaGraspGymEnv(gym.Env):
             grasp_action = [0, 0, 0.005, 0, 0, 0, 0]
             self._panda.apply_action(grasp_action)
             p.stepSimulation()
-            block_pos, block_orn = p.getBasePositionAndOrientation(self.target_object_id)
+            block_pos, block_orn = p.getBasePositionAndOrientation(self._target_object_id)
             if block_pos[2] > 0.8:
                 break
             state = p.getLinkState(self._panda.panda_id, self._panda.gripper_index)
             actual_end_effector_pos = state[0]
-            if actual_end_effector_pos[2] > 2:
+            if actual_end_effector_pos[2] > 2.5:
                 break
 
     def get_distance(self, point_a, point_b, axis):
@@ -249,45 +266,42 @@ class PandaGraspGymEnv(gym.Env):
         gripper_pos = self.get_gripper_pos()
         return self.get_distance(gripper_pos, target_obj_pos, [0, 0, 1])
 
-    def is_successful_grasp(self):
-        target_obj_pos = self.get_target_pos()
-        if self._attempted_grasp:
-            if target_obj_pos[2] > 0.7:
-                self.successful_grasp = True
-                self.successful_grasp_count += 1
-                print(
-                    "Successfully grasped a block!!! Timestep: {} Episode: {}, Grasp Count: {} Attempted Grasps: {} ".format(
-                        self._env_step_counter, self.episode_number, self.successful_grasp_count,
-                        self.grasp_attempts_count))
-                return True
-        return False
-
-    def _compute_reward(self):
-        horizontal_distance = self.get_horizontal_distance_to_target()
-        reward = -horizontal_distance * 10
-        if horizontal_distance <= 0.025:
-            reward = -(self.get_distance_to_target() * 10)
+    def compute_reward(self, achieved_goal, desired_goal, info):
+        if self._reward_type == 'sparse':
+            return np.float32(self._is_success(achieved_goal, desired_goal))
         else:
-            reward -= 10
+            horizontal_distance = self.get_horizontal_distance_to_target()
+            reward = -horizontal_distance * 10
+            if horizontal_distance <= 0.025:
+                reward = -(self.get_distance_to_target() * 10)
+            else:
+                reward -= 10
 
-        # print("Horizonal {}, Veritcal {}, Reward {}".format(horizontal_distance, vertical_distance, reward))
-
-        return reward
+            if info['is_success']:
+                reward += 10000
+            return reward
 
     def _sample_pose(self):
         ws_lim = self._panda.workspace_lim
-        x = np.random.uniform(low=ws_lim[0][0], high=ws_lim[0][1], size=1)
-        y = np.random.uniform(low=ws_lim[1][0], high=ws_lim[1][1], size=1)
+        x = np.random.uniform(low=ws_lim[0][0], high=ws_lim[0][1])
+        y = np.random.uniform(low=ws_lim[1][0], high=ws_lim[1][1])
         z = self._table_height
         obj_pose = [x, y, z]
 
         return obj_pose
 
     def get_gripper_pos(self):
-        return self._observation[0:3]
+        return self._observation["observation"][0:3]
 
     def get_target_pos(self):
-        return self._observation[-3:]
+        return self._observation["achieved_goal"]
+
+    def _is_success(self, object_position, goal_position):
+        d = self.get_distance(object_position, goal_position, [0, 0, 1])
+        if self._attempted_grasp:
+            if d <= self._distance_threshold:
+                return True
+        return False
 
     def render(self, mode="rgb_array", close=False):
         if mode != "rgb_array":
@@ -301,18 +315,18 @@ class PandaGraspGymEnv(gym.Env):
                                                                 roll=0,
                                                                 upAxisIndex=2)
         proj_matrix = self._p.computeProjectionMatrixFOV(fov=60,
-                                                         aspect=float(self.img_width) / self.img_height,
+                                                         aspect=float(self._img_width) / self._img_height,
                                                          nearVal=0.1,
                                                          farVal=100.0)
-        (_, _, px, _, _) = self._p.getCameraImage(width=self.img_width,
-                                                  height=self.img_height,
+        (_, _, px, _, _) = self._p.getCameraImage(width=self._img_width,
+                                                  height=self._img_height,
                                                   viewMatrix=view_matrix,
                                                   projectionMatrix=proj_matrix,
                                                   renderer=self._p.ER_BULLET_HARDWARE_OPENGL)
         # renderer=self._p.ER_TINY_RENDERER)
 
         rgb_array = np.array(px, dtype=np.uint8)
-        rgb_array = np.reshape(rgb_array, (self.img_height, self.img_width, 4))
+        rgb_array = np.reshape(rgb_array, (self._img_height, self._img_width, 4))
 
         rgb_array = rgb_array[:, :, :3]
         return rgb_array
