@@ -114,7 +114,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._panda.workspace_lim[2][0] = self._table_height
 
         if self._is_target_position_fixed:
-            target_orn = p.getQuaternionFromEuler([0, 0, np.random.uniform(-np.pi, np.pi)])
+            target_orn = p.getQuaternionFromEuler([0, 0, 0])
             self._target_object_id = p.loadURDF(os.path.join(self._urdf_root, "franka/cube_small.urdf"),
                                                 basePosition=[0.7, 0.25, self._table_height],
                                                 baseOrientation=target_orn,
@@ -297,9 +297,8 @@ class PandaGraspGymEnv(gym.GoalEnv):
         return self._observation["achieved_goal"]
 
     def _is_success(self, object_position, goal_position):
-        d = self.get_distance(object_position, goal_position, [0, 0, 1])
         if self._attempted_grasp:
-            if d <= self._distance_threshold:
+            if object_position[2] >= goal_position[2]:
                 return True
         return False
 

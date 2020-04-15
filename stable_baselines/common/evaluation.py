@@ -45,7 +45,7 @@ def evaluate_policy(model, env, n_eval_episodes=10, deterministic=True,
                 env.render(mode = 'human')
         episode_rewards.append(episode_reward)
         episode_lengths.append(episode_length)
-        maybe_is_success = _info[0].get('is_success')
+        maybe_is_success = _info.get('is_success')
         if maybe_is_success is not None:
             episode_successes.append(float(maybe_is_success))
 
