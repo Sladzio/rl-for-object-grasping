@@ -42,7 +42,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._use_ik = use_ik
         self._urdf_root = urdf_root
         self._action_repeat_amount = action_repeat_amount
-        self._observation = []
+        self._observation = {}
         self._env_step_counter = 0
         self._is_rendering = is_rendering
         self._max_step_count = max_step_count
@@ -77,7 +77,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
 
         obs = self.get_extended_observation()
         self.observation_space = spaces.Dict(dict(
-            desired_goal=spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
+            desired_goal=spaces.Box(-np.inf, np.inf, shape=obs['desired_goal'].shape, dtype='float32'),
             achieved_goal=spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
             observation=spaces.Box(-np.inf, np.inf, shape=obs['observation'].shape, dtype='float32'),
         ))
@@ -140,9 +140,6 @@ class PandaGraspGymEnv(gym.GoalEnv):
         observation = self._panda.get_observation()
         target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self._target_object_id)
         achieved_goal = list(target_obj_pos)
-        observation.extend(achieved_goal)
-        observation.extend(list(target_obj_orn))
-        observation.extend(self._goal_position)
         return {
             'observation': np.asarray(observation.copy()),
             'achieved_goal': np.asarray(achieved_goal.copy()),
@@ -194,19 +191,20 @@ class PandaGraspGymEnv(gym.GoalEnv):
             self._grasp_attempts_count += 1
             self.perform_grasp()
             self._observation = self.get_extended_observation()
+        is_success = self._is_success(self._observation['achieved_goal'], self._observation['desired_goal'])
 
         info = {
-            'is_success': self._is_success(self._observation['achieved_goal'], self._observation['desired_goal'])}
+            'is_success': is_success}
 
-        if info['is_success']:
+        if is_success:
             self._is_successful_grasp = True
             self._successful_grasp_count += 1
             print(
                 "Successfully grasped a block!!! Timestep: {} Episode: {}, Grasp Count: {} Attempted Grasps: {} ".format(
                     self._env_step_counter, self._episode_number, self._successful_grasp_count,
                     self._grasp_attempts_count))
-        reward = self.compute_reward(self._observation['achieved_goal'], self._goal_position, info)
 
+        reward = self.compute_reward(self._observation['achieved_goal'], self._goal_position, info)
         done = self._termination()
         if done:
             self._episode_number += 1
