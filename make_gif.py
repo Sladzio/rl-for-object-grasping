@@ -4,7 +4,7 @@ import os
 import numpy as np
 from stable_baselines.common.vec_env import DummyVecEnv
 
-import robot_data
+import object_data
 from envs.panda_grasp_env import PandaGraspGymEnv
 
 from stable_baselines import DQN, DDPG
@@ -19,7 +19,7 @@ gif_dir = "gif/"
 
 
 def main(model_name, algo, testRange, isTargetPositionFixed, isDiscrete):
-    panda_env = PandaGraspGymEnv(urdfRoot=robot_data.getDataPath(), isRendering=True, useIK=True, isDiscrete=isDiscrete,
+    panda_env = PandaGraspGymEnv(urdfRoot=object_data.getDataPath(), isRendering=True, useIK=True, isDiscrete=isDiscrete,
                                  numControlledJoints=7, isTargetPositionFixed=isTargetPositionFixed)
     env = DummyVecEnv([lambda: panda_env])
 

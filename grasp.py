@@ -1,6 +1,6 @@
 import inspect
 import os
-import robot_data
+import object_data
 from envs.panda_grasp_env import PandaGraspGymEnv
 
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -10,7 +10,7 @@ os.sys.path.insert(0, parent_dir)
 
 
 def main():
-    panda_env = PandaGraspGymEnv(urdf_root=robot_data.getDataPath(), is_rendering=True, use_ik=True, is_discrete=True,
+    panda_env = PandaGraspGymEnv(urdf_root=object_data.getDataPath(), is_rendering=True, use_ik=True, is_discrete=True,
                                  num_controlled_joints=7, is_target_position_fixed=True)
     panda_env.render(mode='human')
     obs = panda_env.get_extended_observation()

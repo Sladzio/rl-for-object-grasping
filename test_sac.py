@@ -1,7 +1,7 @@
 import inspect
 import os
 
-import robot_data
+import object_data
 from envs.panda_grasp_env import PandaGraspGymEnv
 from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines import SAC
@@ -12,7 +12,7 @@ os.sys.path.insert(0, parent_dir)
 
 
 def main():
-    panda_env = PandaGraspGymEnv(urdfRoot=robot_data.getDataPath(), isRendering=True, useIK=True, isDiscrete=False,
+    panda_env = PandaGraspGymEnv(urdfRoot=object_data.getDataPath(), isRendering=True, useIK=True, isDiscrete=False,
                                  numControlledJoints=7)
 
     env = DummyVecEnv([lambda: panda_env])

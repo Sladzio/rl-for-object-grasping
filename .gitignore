@@ -1,5 +1,5 @@
 envs/__pycache__
-robot_data/__pycache__
+object_data/__pycache__
 stable_baselines/common/__pycache__
 stable_baselines/her/__pycache__
 stable_baselines/ppo2/__pycache__

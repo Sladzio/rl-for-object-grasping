@@ -7,7 +7,7 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 from gym import spaces
-import robot_data
+import object_data
 from . import PandaEnv
 
 
@@ -16,7 +16,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
                 'video.frames_per_second': 50}
 
     def __init__(self,
-                 urdf_root=robot_data.getDataPath(),
+                 urdf_root=object_data.getDataPath(),
                  use_ik=True,
                  is_discrete=0,
                  action_repeat_amount=1,
@@ -25,7 +25,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
                  is_target_position_fixed=False,
                  num_controlled_joints=7,
                  is_continuous_downward_enabled=False,
-                 reward_type='dense'):
+                 reward_type='dense', draw_workspace=False):
 
         self._episode_number = 1
         self._grasp_attempts_count = 0
@@ -61,6 +61,8 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._goal_position = None
         self.lift_distance = 0.04
         self._distance_threshold = 0.01
+        self._table_workspace_shape = []
+        self._draw_workspace = draw_workspace
 
         if self._is_discrete:
             self.action_space = 7
@@ -97,33 +99,54 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._terminated = False
         self._attempted_grasp = False
         self._env_step_counter = 0
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0,lightPosition=[0, 0, 10])
+
+
         p.resetSimulation()
         p.setPhysicsEngineParameter(numSolverIterations=150)
         p.setTimeStep(self._time_step)
-        p.loadURDF(os.path.join(pybullet_data.getDataPath(), "plane.urdf"), useFixedBase=True)
 
-        self._panda = PandaEnv([0, 0, 0.625], self._urdf_root, time_step=self._time_step,
+        table_orn = p.getQuaternionFromEuler([0, 0, np.pi / 2])
+        table_id = p.loadURDF(os.path.join(pybullet_data.getDataPath(), "table/table.urdf"), useFixedBase=True,
+                              baseOrientation=table_orn)
+
+        table_shape = p.getVisualShapeData(table_id, -1)
+        table_top_shape = table_shape[0]
+        self._table_height = table_top_shape[5][2] + table_top_shape[3][2] / 2
+        table_leg_pos = table_shape[1][5]
+
+        # Rotation of the vector is needed
+        # getVisualShapeData returns position of local visual frame, relative to link/joint frame
+        table_leg_pos = p.rotateVector(table_orn, table_leg_pos)
+
+        max_workspace_x = abs(table_leg_pos[0])
+        max_workspace_y = abs(table_leg_pos[1])
+
+        robot_base_pos = [-max_workspace_x + 0.1, 0, self._table_height]
+
+        self._table_workspace_shape = [
+            [robot_base_pos[0] + 0.2, max_workspace_x],  # X
+            [-max_workspace_y, max_workspace_y],  # Y
+            [self._table_height, 1]  # Z
+        ]
+
+        if self._draw_workspace:
+            self._draw_workspace_limits()
+
+        self._panda = PandaEnv(robot_base_pos, self._urdf_root, time_step=self._time_step,
                                use_ik=self._use_ik, num_controlled_joints=self._num_controlled_joints)
-
-        table_id = p.loadURDF(os.path.join(self._urdf_root, "franka/table.urdf"), useFixedBase=True)
-
-        table_info = p.getVisualShapeData(table_id, -1)[0]
-
-        self._table_height = table_info[5][2] + table_info[3][2] + 0.01
-
-        self._panda.workspace_lim[2][0] = self._table_height
 
         if self._is_target_position_fixed:
             target_orn = p.getQuaternionFromEuler([0, 0, 0])
-            self._target_object_id = p.loadURDF(os.path.join(self._urdf_root, "franka/cube_small.urdf"),
+            self._target_object_id = p.loadURDF(os.path.join(self._urdf_root, "cube/cube.urdf"),
                                                 basePosition=[0.7, 0.25, self._table_height],
                                                 baseOrientation=target_orn,
                                                 useFixedBase=False,
                                                 globalScaling=.5)
             self._goal_position = [0.7, 0.25, self._table_height + self.lift_distance]
         else:
-            pos = self._sample_pose()
-            self._target_object_id = p.loadURDF(os.path.join(self._urdf_root, "franka/cube_small.urdf"),
+            pos = self._get_random_position_on_table()
+            self._target_object_id = p.loadURDF(os.path.join(self._urdf_root, "cube/cube.urdf"),
                                                 basePosition=pos, useFixedBase=False,
                                                 globalScaling=.5)
             self._goal_position = np.add(pos, [0, 0, self.lift_distance])
@@ -135,6 +158,18 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._observation = self.get_extended_observation()
 
         return self._observation
+
+    def _draw_workspace_limits(self):
+        xMin = self._table_workspace_shape[0][0]
+        xMax = self._table_workspace_shape[0][1]
+        yMin = self._table_workspace_shape[1][0]
+        yMax = self._table_workspace_shape[1][1]
+        zMin = self._table_workspace_shape[2][0] + 0.01
+
+        p.addUserDebugLine([xMin, yMin, zMin], [xMax, yMin, zMin])
+        p.addUserDebugLine([xMax, yMin, zMin], [xMax, yMax, zMin])
+        p.addUserDebugLine([xMax, yMax, zMin], [xMin, yMax, zMin])
+        p.addUserDebugLine([xMin, yMax, zMin], [xMin, yMin, zMin])
 
     def get_extended_observation(self):
         observation = self._panda.get_observation()
@@ -266,24 +301,41 @@ class PandaGraspGymEnv(gym.GoalEnv):
 
     def compute_reward(self, achieved_goal, desired_goal, info):
         if self._reward_type == 'sparse':
-            return np.float32(self._is_success(achieved_goal, desired_goal))
+            failed_grasp_penalty = self.compute_failed_grasp_penalty()
+            reward = self.compute_sparse_reward(achieved_goal, desired_goal) - failed_grasp_penalty
         else:
-            horizontal_distance = self.get_horizontal_distance_to_target()
-            reward = -horizontal_distance * 10
-            if horizontal_distance <= 0.025:
-                reward = -(self.get_distance_to_target() * 10)
-            else:
-                reward -= 10
+            reward = self.compute_dense_reward(achieved_goal, desired_goal)
 
-            if info['is_success']:
-                reward += 10000
-            return reward
+        return reward
 
-    def _sample_pose(self):
-        ws_lim = self._panda.workspace_lim
+    def compute_failed_grasp_penalty(self):
+        if self._attempted_grasp and not self._is_successful_grasp:
+            return self._max_step_count - self._env_step_counter
+        else:
+            return 0
+
+    def compute_dense_reward(self, achieved_goal, desired_goal):
+        horizontal_distance = self.get_horizontal_distance_to_target()
+        reward = -horizontal_distance * 10
+        if horizontal_distance <= 0.025:
+            reward = -(self.get_distance_to_target() * 10)
+        else:
+            reward -= 10
+        if self._is_success(achieved_goal, desired_goal):
+            reward += 10000
+        return reward
+
+    def compute_sparse_reward(self, achieved_goal, desired_goal):
+        if self._is_success(achieved_goal, desired_goal):
+            return 0
+        else:
+            return -1
+
+    def _get_random_position_on_table(self):
+        ws_lim = self._table_workspace_shape
         x = np.random.uniform(low=ws_lim[0][0], high=ws_lim[0][1])
         y = np.random.uniform(low=ws_lim[1][0], high=ws_lim[1][1])
-        z = self._table_height
+        z = self._table_height + 0.01
         obj_pose = [x, y, z]
 
         return obj_pose

@@ -1,25 +1,19 @@
 import math as m
 import os
 import pybullet as p
-import robot_data
+import object_data
 import numpy as np
 
 
 class PandaEnv:
 
-    def __init__(self, base_position, urdf_root_path=robot_data.getDataPath(), time_step=0.01, use_ik=False,
+    def __init__(self, base_position, urdf_root_path=object_data.getDataPath(), time_step=0.01, use_ik=False,
                  num_controlled_joints=7):
         self.finger_force = 10
-        self.urdf_root_path = os.path.join(urdf_root_path, "franka/robot/panda.urdf")
+        self.urdf_root_path = os.path.join(urdf_root_path, "robot/panda.urdf")
         self.time_step = time_step
         self.use_ik = use_ik
         self.base_position = base_position
-        self.workspace_lim = [[0.3, 0.7],  # X
-                              [-0.3, 0.3],  # Y
-                              [0, 1]]  # Z
-        self.workspace_lim_gripper = [[0.1, 1],  # X
-                                      [-0.4, 0.4],  # Y
-                                      [0.65, 1]]  # Z
         self.gripper_index = 8
         self.num_controlled_joints = num_controlled_joints
         self.max_force = 5 * 240.

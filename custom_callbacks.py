@@ -6,7 +6,7 @@ import os
 from stable_baselines.results_plotter import load_results, ts2xy
 
 
-class TensorboardCallback(BaseCallback):
+class MeanHundredEpsTensorboardCallback(BaseCallback):
     """
     Custom callback for plotting additional values in tensorboard.
     """
@@ -14,7 +14,7 @@ class TensorboardCallback(BaseCallback):
     def __init__(self, log_dir, verbose=0):
         self.is_tb_set = False
         self.log_dir = log_dir
-        super(TensorboardCallback, self).__init__(verbose)
+        super(MeanHundredEpsTensorboardCallback, self).__init__(verbose)
 
     def _init_callback(self) -> None:
         # Create folder if needed

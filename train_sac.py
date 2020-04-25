@@ -1,6 +1,6 @@
 from stable_baselines.results_plotter import load_results, ts2xy
 
-import robot_data
+import object_data
 from envs import PandaGraspGymEnv
 from stable_baselines.sac.policies import MlpPolicy
 from stable_baselines import SAC
@@ -42,7 +42,7 @@ def callback(_locals, _globals):
 
 def main():
     os.makedirs(log_dir, exist_ok=True)
-    panda_env = PandaGraspGymEnv(urdfRoot=robot_data.getDataPath(), isRendering=False, useIK=True, isDiscrete=False,
+    panda_env = PandaGraspGymEnv(urdfRoot=object_data.getDataPath(), isRendering=False, useIK=True, isDiscrete=False,
                                  numControlledJoints=7)
     panda_env = Monitor(panda_env, log_dir, allow_early_resets=True)
 

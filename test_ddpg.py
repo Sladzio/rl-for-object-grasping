@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 
-import robot_data
+import object_data
 from envs.panda_grasp_env import PandaGraspGymEnv
 from stable_baselines.ddpg.policies import MlpPolicy
 from stable_baselines.common.vec_env import DummyVecEnv
@@ -16,7 +16,7 @@ os.sys.path.insert(0, parent_dir)
 
 
 def main():
-    panda_env = PandaGraspGymEnv(urdf_root=robot_data.getDataPath(), is_rendering=True, use_ik=True, is_discrete=False,
+    panda_env = PandaGraspGymEnv(urdf_root=object_data.getDataPath(), is_rendering=True, use_ik=True, is_discrete=False,
                                  num_controlled_joints=7)
 
     env = DummyVecEnv([lambda: panda_env])
