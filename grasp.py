@@ -11,10 +11,14 @@ os.sys.path.insert(0, parent_dir)
 
 def main():
     panda_env = PandaGraspGymEnv(urdf_root=object_data.getDataPath(), is_rendering=True, use_ik=True, is_discrete=True,
-                                 num_controlled_joints=7, is_target_position_fixed=True)
+                                 num_controlled_joints=7, is_target_position_fixed=False, draw_workspace=True)
     panda_env.render(mode='human')
-    obs = panda_env.get_extended_observation()
-    panda_env._panda.apply_action([.2, .27, -0.19, 0, 0.1, 0, 1], False)
+    obs = panda_env.get_observation()
+    xMin = panda_env._table_workspace_shape[0][0]
+    xMax = panda_env._table_workspace_shape[0][1]
+    yMin = panda_env._table_workspace_shape[1][0]
+    yMax = panda_env._table_workspace_shape[1][1]
+    panda_env._panda.apply_action([0.35 + xMax, 0, -0.19, 0, 0, 0, 1], False)
     panda_env.step(0)
     while (True):
         panda_env._p.stepSimulation()

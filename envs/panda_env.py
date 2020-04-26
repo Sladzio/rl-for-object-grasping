@@ -54,9 +54,11 @@ class PandaEnv:
         observation = []
         state = p.getLinkState(self.panda_id, self.gripper_index, computeLinkVelocity=True)
         pos = state[0]
+        orn = state[1]
         velL = state[6]
         velA = state[7]
         observation.extend(list(pos))
+        observation.extend(list(orn))
         observation.extend(list(velL))
         observation.extend(list(velA))
 

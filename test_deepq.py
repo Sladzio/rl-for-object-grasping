@@ -19,7 +19,7 @@ def main():
 
     env = HERGoalEnvWrapper(panda_env)
 
-    model = DQN.load("logs/rl_model_150000_steps.zip")
+    model = DQN.load("logs/rl_model_400000_steps.zip")
 
     episode_rewards, episode_lengths, episode_success = evaluate_policy(model, env,
                                                                         n_eval_episodes=50,

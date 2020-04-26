@@ -33,7 +33,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._largest_action_value = 1
         self._img_height = 720
         self._img_width = 960
-        self._distance_to_grasp = 0.11
+        self._distance_to_start_grasp = 0.11
         self._is_continuous_downward_enabled = is_continuous_downward_enabled
         self._attempted_grasp = False
         self._num_controlled_joints = num_controlled_joints
@@ -50,7 +50,6 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._cam_dist = 1.8
         self._cam_yaw = 90
         self._cam_pitch = -20
-        self._table_height = 0
         self._p = p
         self._is_target_position_fixed = is_target_position_fixed
         self._successful_grasp_count = 0
@@ -58,14 +57,16 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._reward_type = reward_type
         self._target_object_id = None
         self._is_successful_grasp = False
-        self._goal_position = None
         self.lift_distance = 0.04
         self._distance_threshold = 0.01
         self._table_workspace_shape = []
         self._draw_workspace = draw_workspace
+        self._table_pos = [0, 0, 0]
+        self._table_orn = p.getQuaternionFromEuler([0, 0, np.pi / 2])
+        self._robot_start_x_offset = -0.35
 
         if self._is_discrete:
-            self.action_space = 7
+            self.action_space = 13
         else:
             self.action_space = self._num_controlled_joints
 
@@ -77,7 +78,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
             p.connect(p.DIRECT)
         self.reset()
 
-        obs = self.get_extended_observation()
+        obs = self.get_observation()
         self.observation_space = spaces.Dict(dict(
             desired_goal=spaces.Box(-np.inf, np.inf, shape=obs['desired_goal'].shape, dtype='float32'),
             achieved_goal=spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
@@ -99,36 +100,18 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._terminated = False
         self._attempted_grasp = False
         self._env_step_counter = 0
-        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0,lightPosition=[0, 0, 10])
-
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0, lightPosition=[0, 0, 10])
 
         p.resetSimulation()
         p.setPhysicsEngineParameter(numSolverIterations=150)
         p.setTimeStep(self._time_step)
 
-        table_orn = p.getQuaternionFromEuler([0, 0, np.pi / 2])
         table_id = p.loadURDF(os.path.join(pybullet_data.getDataPath(), "table/table.urdf"), useFixedBase=True,
-                              baseOrientation=table_orn)
+                              basePosition=self._table_pos, baseOrientation=self._table_orn)
 
-        table_shape = p.getVisualShapeData(table_id, -1)
-        table_top_shape = table_shape[0]
-        self._table_height = table_top_shape[5][2] + table_top_shape[3][2] / 2
-        table_leg_pos = table_shape[1][5]
+        self._table_workspace_shape = self._compute_workspace(table_id)
 
-        # Rotation of the vector is needed
-        # getVisualShapeData returns position of local visual frame, relative to link/joint frame
-        table_leg_pos = p.rotateVector(table_orn, table_leg_pos)
-
-        max_workspace_x = abs(table_leg_pos[0])
-        max_workspace_y = abs(table_leg_pos[1])
-
-        robot_base_pos = [-max_workspace_x + 0.1, 0, self._table_height]
-
-        self._table_workspace_shape = [
-            [robot_base_pos[0] + 0.2, max_workspace_x],  # X
-            [-max_workspace_y, max_workspace_y],  # Y
-            [self._table_height, 1]  # Z
-        ]
+        robot_base_pos = [self._robot_start_x_offset, 0, self._get_table_height()]
 
         if self._draw_workspace:
             self._draw_workspace_limits()
@@ -136,68 +119,76 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._panda = PandaEnv(robot_base_pos, self._urdf_root, time_step=self._time_step,
                                use_ik=self._use_ik, num_controlled_joints=self._num_controlled_joints)
 
-        if self._is_target_position_fixed:
-            target_orn = p.getQuaternionFromEuler([0, 0, 0])
-            self._target_object_id = p.loadURDF(os.path.join(self._urdf_root, "cube/cube.urdf"),
-                                                basePosition=[0.7, 0.25, self._table_height],
-                                                baseOrientation=target_orn,
-                                                useFixedBase=False,
-                                                globalScaling=.5)
-            self._goal_position = [0.7, 0.25, self._table_height + self.lift_distance]
-        else:
-            pos = self._get_random_position_on_table()
-            self._target_object_id = p.loadURDF(os.path.join(self._urdf_root, "cube/cube.urdf"),
-                                                basePosition=pos, useFixedBase=False,
-                                                globalScaling=.5)
-            self._goal_position = np.add(pos, [0, 0, self.lift_distance])
+        pos = self._get_random_position_on_table()
+        self._target_object_id = p.loadURDF(os.path.join(self._urdf_root, "cube/cube.urdf"),
+                                            basePosition=pos, useFixedBase=False,
+                                            globalScaling=.5)
 
+        self._goal_position = np.add(pos, [0, 0, self.lift_distance])
         p.setGravity(0, 0, -9.8)
 
         p.stepSimulation()
 
-        self._observation = self.get_extended_observation()
+        self._observation = self.get_observation()
 
         return self._observation
 
-    def _draw_workspace_limits(self):
-        xMin = self._table_workspace_shape[0][0]
-        xMax = self._table_workspace_shape[0][1]
-        yMin = self._table_workspace_shape[1][0]
-        yMax = self._table_workspace_shape[1][1]
-        zMin = self._table_workspace_shape[2][0] + 0.01
+    def _compute_workspace(self, table_id):
+        table_shape = p.getVisualShapeData(table_id, -1)
+        table_top_shape = table_shape[0]
+        table_height = table_top_shape[5][2] + table_top_shape[3][2] / 2
+        table_leg_pos = table_shape[1][5]
+        # Rotation of the vector is needed
+        # getVisualShapeData returns position of local visual frame, relative to link/joint frame
+        table_leg_pos = p.rotateVector(self._table_orn, table_leg_pos)
+        max_workspace_x = abs(table_leg_pos[0])
+        max_workspace_y = abs(table_leg_pos[1])
+        return [
+            [-max_workspace_x + 0.3, max_workspace_x - 0.05],  # X
+            [-max_workspace_y + 0.16, max_workspace_y - 0.16],  # Y
+            [table_height, 1]  # Z
+        ]
 
-        p.addUserDebugLine([xMin, yMin, zMin], [xMax, yMin, zMin])
-        p.addUserDebugLine([xMax, yMin, zMin], [xMax, yMax, zMin])
-        p.addUserDebugLine([xMax, yMax, zMin], [xMin, yMax, zMin])
-        p.addUserDebugLine([xMin, yMax, zMin], [xMin, yMin, zMin])
+    def _get_table_height(self):
+        return self._table_workspace_shape[2][0]
 
-    def get_extended_observation(self):
+    def _get_random_position_on_table(self):
+        ws_lim = self._table_workspace_shape
+        x = np.random.uniform(low=ws_lim[0][0], high=ws_lim[0][1])
+        y = np.random.uniform(low=ws_lim[1][0], high=ws_lim[1][1])
+        z = self._get_table_height()
+        obj_pose = [x, y, z]
+
+        return obj_pose
+
+    def get_observation(self):
         observation = self._panda.get_observation()
         target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self._target_object_id)
         achieved_goal = list(target_obj_pos)
+        desired_goal = self._goal_position
         return {
             'observation': np.asarray(observation.copy()),
             'achieved_goal': np.asarray(achieved_goal.copy()),
-            'desired_goal': np.asarray(self._goal_position.copy())
+            'desired_goal': np.asarray(desired_goal.copy())
         }
 
-    def step(self, action):
+    def generate_action_array(self, action):
         if self._is_discrete:
             delta_pos = 0.01
             delta_angle = 0.01
-            dx = [0, -delta_pos, delta_pos, 0, 0, 0, 0][action]
-            dy = [0, 0, 0, -delta_pos, delta_pos, 0, 0][action]
+            dx = [0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][action]
+            dy = [0, 0, 0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0, 0, 0][action]
             if self._is_continuous_downward_enabled:
                 dz = -delta_pos
             else:
-                dz = [0, 0, 0, 0, 0, -delta_pos, delta_pos][action]
+                dz = [0, 0, 0, 0, 0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0][action]
 
-            # droll = [0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle, 0, 0, 0, 0][action]
-            # dpitch = [0, 0, 0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle, 0, 0][action]
-            # dyaw = [0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle][action]
+            droll = [0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle, 0, 0, 0, 0][action]
+            dpitch = [0, 0, 0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle, 0, 0][action]
+            dyaw = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle][action]
             f = 1
-            real_action = [dx, dy, dz, 0, 0, 0, f]
-            return self.real_step(real_action)
+            return [dx, dy, dz, droll, dpitch, dyaw, f]
+
         else:
             delta_pos = 1.5
             dx = action[0] * delta_pos
@@ -207,10 +198,10 @@ class PandaGraspGymEnv(gym.GoalEnv):
             dpitch = action[4] * delta_pos
             dyaw = action[5] * delta_pos
             f = 1
-            real_action = [dx, dy, dz, droll, dpitch, dyaw, f]
-            return self.real_step(real_action)
+            return [dx, dy, dz, droll, dpitch, dyaw, f]
 
-    def real_step(self, action):
+    def step(self, action):
+        action = self.generate_action_array(action)
         self._panda.apply_action(action)
         p.stepSimulation()
         self._env_step_counter += 1
@@ -218,18 +209,18 @@ class PandaGraspGymEnv(gym.GoalEnv):
         if self._is_rendering:
             time.sleep(self._time_step)
 
-        self._observation = self.get_extended_observation()
+        self._observation = self.get_observation()
 
-        distance = self.get_vertical_distance_to_target()
+        vertical_distance = self.get_vertical_distance_to_target()
 
-        if distance <= self._distance_to_grasp:
-            self._grasp_attempts_count += 1
+        if vertical_distance <= self._distance_to_start_grasp:
             self.perform_grasp()
-            self._observation = self.get_extended_observation()
-        is_success = self._is_success(self._observation['achieved_goal'], self._observation['desired_goal'])
+            self._observation = self.get_observation()
 
-        info = {
-            'is_success': is_success}
+        achieved_goal = self._observation['achieved_goal']
+        desired_goal = self._observation['desired_goal']
+        is_success = self._is_success(achieved_goal, desired_goal)
+        info = {'is_success': is_success}
 
         if is_success:
             self._is_successful_grasp = True
@@ -239,7 +230,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
                     self._env_step_counter, self._episode_number, self._successful_grasp_count,
                     self._grasp_attempts_count))
 
-        reward = self.compute_reward(self._observation['achieved_goal'], self._goal_position, info)
+        reward = self.compute_reward(achieved_goal, desired_goal, info)
         done = self._termination()
         if done:
             self._episode_number += 1
@@ -255,6 +246,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self.close_fingers(anim_length)
         self.lift_gripper(anim_length)
         self._attempted_grasp = True
+        self._grasp_attempts_count += 1
 
     def close_fingers(self, anim_length):
         finger_angle = 1
@@ -283,6 +275,12 @@ class PandaGraspGymEnv(gym.GoalEnv):
         point_a = np.array([axis[0] * point_a[0], axis[1] * point_a[1], axis[2] * point_a[2]])
         point_b = np.array([axis[0] * point_b[0], axis[1] * point_b[1], axis[2] * point_b[2]])
         return np.linalg.norm(point_a - point_b)
+
+    def get_gripper_pos(self):
+        return self._observation["observation"][0:3]
+
+    def get_target_pos(self):
+        return self._observation["achieved_goal"]
 
     def get_horizontal_distance_to_target(self):
         target_obj_pos = self.get_target_pos()
@@ -331,21 +329,6 @@ class PandaGraspGymEnv(gym.GoalEnv):
         else:
             return -1
 
-    def _get_random_position_on_table(self):
-        ws_lim = self._table_workspace_shape
-        x = np.random.uniform(low=ws_lim[0][0], high=ws_lim[0][1])
-        y = np.random.uniform(low=ws_lim[1][0], high=ws_lim[1][1])
-        z = self._table_height + 0.01
-        obj_pose = [x, y, z]
-
-        return obj_pose
-
-    def get_gripper_pos(self):
-        return self._observation["observation"][0:3]
-
-    def get_target_pos(self):
-        return self._observation["achieved_goal"]
-
     def _is_success(self, object_position, goal_position):
         if self._attempted_grasp:
             if object_position[2] >= goal_position[2]:
@@ -379,3 +362,15 @@ class PandaGraspGymEnv(gym.GoalEnv):
 
         rgb_array = rgb_array[:, :, :3]
         return rgb_array
+
+    def _draw_workspace_limits(self):
+        xMin = self._table_workspace_shape[0][0]
+        xMax = self._table_workspace_shape[0][1]
+        yMin = self._table_workspace_shape[1][0]
+        yMax = self._table_workspace_shape[1][1]
+        zMin = self._table_workspace_shape[2][0] + 0.01
+
+        p.addUserDebugLine([xMin, yMin, zMin], [xMax, yMin, zMin])
+        p.addUserDebugLine([xMax, yMin, zMin], [xMax, yMax, zMin])
+        p.addUserDebugLine([xMax, yMax, zMin], [xMin, yMax, zMin])
+        p.addUserDebugLine([xMin, yMax, zMin], [xMin, yMin, zMin])
