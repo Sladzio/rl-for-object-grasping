@@ -18,7 +18,7 @@ def main():
     xMax = panda_env._table_workspace_shape[0][1]
     yMin = panda_env._table_workspace_shape[1][0]
     yMax = panda_env._table_workspace_shape[1][1]
-    panda_env._panda.apply_action([0.35 + xMax, 0, -0.19, 0, 0, 0, 1], False)
+    panda_env._panda.apply_action([0, 0, -0.30, 0, 0, 0, 1], False)
     panda_env.step(0)
     while (True):
         panda_env._p.stepSimulation()

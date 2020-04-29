@@ -25,7 +25,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
                  is_target_position_fixed=False,
                  num_controlled_joints=7,
                  is_continuous_downward_enabled=False,
-                 reward_type='dense', draw_workspace=False):
+                 reward_type='dense', draw_workspace=False, lock_rotation=True):
 
         self._episode_number = 1
         self._grasp_attempts_count = 0
@@ -64,9 +64,13 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._table_pos = [0, 0, 0]
         self._table_orn = p.getQuaternionFromEuler([0, 0, np.pi / 2])
         self._robot_start_x_offset = -0.35
+        self._lock_rotation = lock_rotation
 
         if self._is_discrete:
-            self.action_space = 13
+            if self._lock_rotation:
+                self.action_space = 7
+            else:
+                self.action_space = 13
         else:
             self.action_space = self._num_controlled_joints
 
@@ -120,8 +124,14 @@ class PandaGraspGymEnv(gym.GoalEnv):
                                use_ik=self._use_ik, num_controlled_joints=self._num_controlled_joints)
 
         pos = self._get_random_position_on_table()
+
+        if self._lock_rotation:
+            orn = p.getQuaternionFromEuler([0, 0, 0])
+        else:
+            orn = self._get_random_z_orientation()
+
         self._target_object_id = p.loadURDF(os.path.join(self._urdf_root, "cube/cube.urdf"),
-                                            basePosition=pos, useFixedBase=False,
+                                            basePosition=pos, baseOrientation=orn, useFixedBase=False,
                                             globalScaling=.5)
 
         self._goal_position = np.add(pos, [0, 0, self.lift_distance])
@@ -145,7 +155,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
         max_workspace_y = abs(table_leg_pos[1])
         return [
             [-max_workspace_x + 0.3, max_workspace_x - 0.05],  # X
-            [-max_workspace_y + 0.16, max_workspace_y - 0.16],  # Y
+            [-max_workspace_y + 0.3, max_workspace_y - 0.3],  # Y
             [table_height, 1]  # Z
         ]
 
@@ -161,9 +171,17 @@ class PandaGraspGymEnv(gym.GoalEnv):
 
         return obj_pose
 
+    def _get_random_z_orientation(self):
+        random_angle = np.random.uniform(low=0, high=2 * np.pi)
+        euler_orn = [0, 0, random_angle]
+        orn = p.getQuaternionFromEuler(euler_orn)
+        return orn
+
     def get_observation(self):
         observation = self._panda.get_observation()
         target_obj_pos, target_obj_orn = p.getBasePositionAndOrientation(self._target_object_id)
+        if not self._lock_rotation:
+            observation.extend(list(target_obj_orn))
         achieved_goal = list(target_obj_pos)
         desired_goal = self._goal_position
         return {
@@ -176,6 +194,8 @@ class PandaGraspGymEnv(gym.GoalEnv):
         if self._is_discrete:
             delta_pos = 0.01
             delta_angle = 0.01
+
+            # Position
             dx = [0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][action]
             dy = [0, 0, 0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0, 0, 0][action]
             if self._is_continuous_downward_enabled:
@@ -183,22 +203,34 @@ class PandaGraspGymEnv(gym.GoalEnv):
             else:
                 dz = [0, 0, 0, 0, 0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0][action]
 
+            # Orientation
             droll = [0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle, 0, 0, 0, 0][action]
             dpitch = [0, 0, 0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle, 0, 0][action]
             dyaw = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle][action]
-            f = 1
-            return [dx, dy, dz, droll, dpitch, dyaw, f]
+
+            # Gripper
+            gripper_angle = 1
+
+            return [dx, dy, dz, droll, dpitch, dyaw, gripper_angle]
 
         else:
             delta_pos = 1.5
+            delta_angle = 1.5
+
+            # Position
             dx = action[0] * delta_pos
             dy = action[1] * delta_pos
             dz = action[2] * delta_pos
-            droll = action[3] * delta_pos
-            dpitch = action[4] * delta_pos
-            dyaw = action[5] * delta_pos
-            f = 1
-            return [dx, dy, dz, droll, dpitch, dyaw, f]
+
+            # Orientation
+            droll = action[3] * delta_angle
+            dpitch = action[4] * delta_angle
+            dyaw = action[5] * delta_angle
+
+            # Gripper
+            gripper_angle = 1
+
+            return [dx, dy, dz, droll, dpitch, dyaw, gripper_angle]
 
     def step(self, action):
         action = self.generate_action_array(action)

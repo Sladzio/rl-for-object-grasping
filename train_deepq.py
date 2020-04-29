@@ -3,7 +3,8 @@ import os
 import numpy as np
 
 import object_data
-from custom_callbacks import MeanHundredEpsTensorboardCallback
+from CustomMonitor import CustomMonitor
+from custom_callbacks import MeanHundredEpsTensorboardCallback, SuccessRateTensorboardCallback
 from envs import PandaGraspGymEnv
 from stable_baselines import DQN
 from stable_baselines.bench import Monitor
@@ -24,9 +25,10 @@ def get_environment():
     return env
 
 
-panda_env = Monitor(get_environment(), log_dir)
+panda_env = CustomMonitor(get_environment(), log_dir)
 every_n_steps_callback = CheckpointCallback(50000, "./logs/")
 mean_hundred_eps_callback = MeanHundredEpsTensorboardCallback(log_dir)
+succ_rate_callback = SuccessRateTensorboardCallback(log_dir)
 time_steps = 10000000
 seed = 100
 
@@ -41,6 +43,7 @@ model = DQN(LnMlpPolicy,
             learning_rate=0.001,
             prioritized_replay=False, seed=seed)
 
-model.learn(total_timesteps=time_steps, callback=[mean_hundred_eps_callback, every_n_steps_callback],
+model.learn(total_timesteps=time_steps,
+            callback=[mean_hundred_eps_callback, succ_rate_callback, every_n_steps_callback],
             log_interval=10)
 model.save("result")
