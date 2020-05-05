@@ -133,7 +133,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
         p.stepSimulation()
 
         self._observation = self.get_extended_observation()
-
+        self._draw_workspace_limits()
         return self._observation
 
     def get_extended_observation(self):
@@ -327,3 +327,16 @@ class PandaGraspGymEnv(gym.GoalEnv):
 
         rgb_array = rgb_array[:, :, :3]
         return rgb_array
+
+    def _draw_workspace_limits(self):
+        xMin = self._panda.workspace_lim[0][0]
+        xMax = self._panda.workspace_lim[0][1]
+        yMin = self._panda.workspace_lim[1][0]
+        yMax = self._panda.workspace_lim[1][1]
+        zMin = self._panda.workspace_lim[2][0] + 0.01
+        print("X Span", xMax - xMin)
+        print("Y Span", yMax - yMin)
+        p.addUserDebugLine([xMin, yMin, zMin], [xMax, yMin, zMin])
+        p.addUserDebugLine([xMax, yMin, zMin], [xMax, yMax, zMin])
+        p.addUserDebugLine([xMax, yMax, zMin], [xMin, yMax, zMin])
+        p.addUserDebugLine([xMin, yMax, zMin], [xMin, yMin, zMin])
