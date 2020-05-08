@@ -133,7 +133,6 @@ class PandaGraspGymEnv(gym.GoalEnv):
         p.stepSimulation()
 
         self._observation = self.get_extended_observation()
-        self._draw_workspace_limits()
         return self._observation
 
     def get_extended_observation(self):
@@ -191,7 +190,11 @@ class PandaGraspGymEnv(gym.GoalEnv):
             self._grasp_attempts_count += 1
             self.perform_grasp()
             self._observation = self.get_extended_observation()
+
         is_success = self._is_success(self._observation['achieved_goal'], self._observation['desired_goal'])
+        if not is_success and self._attempted_grasp:
+            self.open_fingers()
+            self._attempted_grasp = False
 
         info = {
             'is_success': is_success}
@@ -212,7 +215,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
         return self._observation, reward, done, info
 
     def _termination(self):
-        return self._is_successful_grasp or self._env_step_counter >= self._max_step_count or self._attempted_grasp
+        return self._is_successful_grasp or self._env_step_counter >= self._max_step_count
 
     def perform_grasp(self):
         anim_length = 100
@@ -221,7 +224,17 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self.lift_gripper(anim_length)
         self._attempted_grasp = True
 
-    def close_fingers(self, anim_length):
+    def open_fingers(self, anim_length=100):
+        finger_angle = 0
+        for i in range(anim_length):
+            grasp_action = [0, 0, 0, 0, 0, 0, finger_angle]
+            self._panda.apply_action(grasp_action)
+            p.stepSimulation()
+            finger_angle += 1 / anim_length
+            if finger_angle > 1:
+                finger_angle = 1
+
+    def close_fingers(self, anim_length=100):
         finger_angle = 1
         for i in range(anim_length):
             grasp_action = [0, 0, 0, 0, 0, 0, finger_angle]
@@ -269,15 +282,16 @@ class PandaGraspGymEnv(gym.GoalEnv):
             return np.float32(self._is_success(achieved_goal, desired_goal))
         else:
             horizontal_distance = self.get_horizontal_distance_to_target()
-            reward = -horizontal_distance * 10
+            reward = -horizontal_distance
             if horizontal_distance <= 0.025:
-                reward = -(self.get_distance_to_target() * 10)
+                reward = -(self.get_distance_to_target())
             else:
-                reward -= 10
+                reward -= 1
 
-            if info['is_success']:
-                reward += 10000
-            return reward
+            if self._is_success(achieved_goal, desired_goal):
+                reward += self._max_step_count
+
+            return reward * 10
 
     def _sample_pose(self):
         ws_lim = self._panda.workspace_lim
@@ -301,6 +315,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
         return False
 
     def render(self, mode="rgb_array", close=False):
+        self._draw_workspace_limits()
         if mode != "rgb_array":
             return np.array([])
 
@@ -334,8 +349,6 @@ class PandaGraspGymEnv(gym.GoalEnv):
         yMin = self._panda.workspace_lim[1][0]
         yMax = self._panda.workspace_lim[1][1]
         zMin = self._panda.workspace_lim[2][0] + 0.01
-        print("X Span", xMax - xMin)
-        print("Y Span", yMax - yMin)
         p.addUserDebugLine([xMin, yMin, zMin], [xMax, yMin, zMin])
         p.addUserDebugLine([xMax, yMin, zMin], [xMax, yMax, zMin])
         p.addUserDebugLine([xMax, yMax, zMin], [xMin, yMax, zMin])

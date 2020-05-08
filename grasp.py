@@ -14,7 +14,7 @@ def main():
                                  num_controlled_joints=7, is_target_position_fixed=True)
     panda_env.render(mode='human')
     obs = panda_env.get_extended_observation()
-    panda_env._panda.apply_action([.2, .27, -0.19, 0, 0.1, 0, 1], False)
+    panda_env._panda.apply_action([.15, .3, -0.19, 0, 0.1, 0, 1], False)
     panda_env.step(0)
     while (True):
         panda_env._p.stepSimulation()
