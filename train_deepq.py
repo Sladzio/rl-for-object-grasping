@@ -11,13 +11,15 @@ from stable_baselines.results_plotter import load_results, ts2xy
 from envs import PandaGraspGymEnv
 from stable_baselines.common.callbacks import EvalCallback, StopTrainingOnSuccessThreshold, CheckpointCallback
 from stable_baselines.common.vec_env import DummyVecEnv
-from custom_callbacks import MeanHundredEpsCallback,SuccessRateTensorboardCallback
+from custom_callbacks import MeanHundredEpsCallback, SuccessRateTensorboardCallback
 from stable_baselines.her import HERGoalEnvWrapper
 
 best_mean_reward, n_steps = -np.inf, 0
 log_dir = "tmp/"
+eval_log_dir = "tmp/eval/"
 
 os.makedirs(log_dir, exist_ok=True)
+os.makedirs(eval_log_dir, exist_ok=True)
 
 
 def get_environment():
@@ -27,13 +29,13 @@ def get_environment():
     return env
 
 
-panda_env = CustomMonitor(get_environment(), log_dir)
-eval_env = get_environment()
+panda_env = HERGoalEnvWrapper(CustomMonitor(get_environment(), log_dir))
+eval_env = HERGoalEnvWrapper(CustomMonitor(get_environment(), eval_log_dir))
 
-# eval_callback = EvalCallback(eval_env, best_model_save_path='./logs/',
-#                              log_path='./logs/', eval_freq=100000,
-#                              deterministic=True, render=False,
-#                              n_eval_episodes=10)
+eval_callback = EvalCallback(eval_env, best_model_save_path='./logs/',
+                             log_path='./logs/', eval_freq=100000,
+                             deterministic=True, render=False,
+                             n_eval_episodes=10)
 
 every_n_steps_callback = CheckpointCallback(50000, "./logs/")
 
@@ -48,16 +50,18 @@ model_class = DQN
 #             exploration_final_eps=0.02, learning_rate=0.001, prioritized_replay=False, seed=seed)
 
 model = DQN(LnMlpPolicy,
-            HERGoalEnvWrapper(panda_env),
+            panda_env,
             verbose=True,
             tensorboard_log="tensorboard/",
             gamma=.99,
             param_noise=True,
             exploration_fraction=0.1,
             exploration_final_eps=0.02,
-            learning_rate=0.0005,
-            prioritized_replay=False)
+            learning_rate=0.001,
+            prioritized_replay=False,
+            target_network_update_freq=1000)
 
-model.learn(total_timesteps=time_steps, callback=[mean_hundred_eps_callback, succ_rate_callback, every_n_steps_callback],
+model.learn(total_timesteps=time_steps,
+            callback=[mean_hundred_eps_callback, succ_rate_callback, every_n_steps_callback, eval_callback],
             log_interval=10)
 model.save("result")
