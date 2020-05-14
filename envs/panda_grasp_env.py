@@ -22,7 +22,6 @@ class PandaGraspGymEnv(gym.GoalEnv):
                  action_repeat_amount=1,
                  is_rendering=False,
                  max_step_count=1000,
-                 is_target_position_fixed=False,
                  num_controlled_joints=7,
                  is_continuous_downward_enabled=False,
                  reward_type='dense', draw_workspace=False, lock_rotation=True):
@@ -51,7 +50,6 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._cam_yaw = 90
         self._cam_pitch = -20
         self._p = p
-        self._is_target_position_fixed = is_target_position_fixed
         self._successful_grasp_count = 0
         self._panda = None
         self._reward_type = reward_type
@@ -252,6 +250,10 @@ class PandaGraspGymEnv(gym.GoalEnv):
         achieved_goal = self._observation['achieved_goal']
         desired_goal = self._observation['desired_goal']
         is_success = self._is_success(achieved_goal, desired_goal)
+        if not is_success and self._attempted_grasp:
+            self.open_fingers()
+            self._attempted_grasp = False
+
         info = {'is_success': is_success}
 
         if is_success:
@@ -270,7 +272,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
         return self._observation, reward, done, info
 
     def _termination(self):
-        return self._is_successful_grasp or self._env_step_counter >= self._max_step_count or self._attempted_grasp
+        return self._is_successful_grasp or self._env_step_counter >= self._max_step_count
 
     def perform_grasp(self):
         anim_length = 100
@@ -279,6 +281,16 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self.lift_gripper(anim_length)
         self._attempted_grasp = True
         self._grasp_attempts_count += 1
+
+    def open_fingers(self, anim_length=100):
+        finger_angle = 0
+        for i in range(anim_length):
+            grasp_action = [0, 0, 0, 0, 0, 0, finger_angle]
+            self._panda.apply_action(grasp_action)
+            p.stepSimulation()
+            finger_angle += 1 / anim_length
+            if finger_angle > 1:
+                finger_angle = 1
 
     def close_fingers(self, anim_length):
         finger_angle = 1
@@ -346,14 +358,16 @@ class PandaGraspGymEnv(gym.GoalEnv):
 
     def compute_dense_reward(self, achieved_goal, desired_goal):
         horizontal_distance = self.get_horizontal_distance_to_target()
-        reward = -horizontal_distance * 10
+        reward = -horizontal_distance
         if horizontal_distance <= 0.025:
-            reward = -(self.get_distance_to_target() * 10)
+            reward = -(self.get_distance_to_target())
         else:
-            reward -= 10
+            reward -= 1
+
         if self._is_success(achieved_goal, desired_goal):
-            reward += 10000
-        return reward
+            reward += self._max_step_count
+
+        return reward * 10
 
     def compute_sparse_reward(self, achieved_goal, desired_goal):
         if self._is_success(achieved_goal, desired_goal):
