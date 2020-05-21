@@ -18,3 +18,8 @@ stable_baselines/acer/__pycache__
 stable_baselines/__pycache__
 stable_baselines/a2c/__pycache__
 tmp
+
+.idea
+__pycache__
+log
+tensorboard
