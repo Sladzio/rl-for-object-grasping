@@ -68,7 +68,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
             if self._lock_rotation:
                 self.action_space = 7
             else:
-                self.action_space = 13
+                self.action_space = 9
         else:
             self.action_space = self._num_controlled_joints
 
@@ -194,22 +194,20 @@ class PandaGraspGymEnv(gym.GoalEnv):
             delta_angle = 0.01
 
             # Position
-            dx = [0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][action]
-            dy = [0, 0, 0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0, 0, 0][action]
+            dx = [0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0][action]
+            dy = [0, 0, 0, -delta_pos, delta_pos, 0, 0, 0, 0][action]
             if self._is_continuous_downward_enabled:
                 dz = -delta_pos
             else:
-                dz = [0, 0, 0, 0, 0, -delta_pos, delta_pos, 0, 0, 0, 0, 0, 0][action]
+                dz = [0, 0, 0, 0, 0, -delta_pos, delta_pos, 0, 0][action]
 
             # Orientation
-            droll = [0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle, 0, 0, 0, 0][action]
-            dpitch = [0, 0, 0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle, 0, 0][action]
-            dyaw = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle][action]
+            dyaw = [0, 0, 0, 0, 0, 0, 0, -delta_angle, delta_angle][action]
 
             # Gripper
-            gripper_angle = 1
+            gripper_fingers_state = 1
 
-            return [dx, dy, dz, droll, dpitch, dyaw, gripper_angle]
+            return [dx, dy, dz, 0, 0, dyaw, gripper_fingers_state]
 
         else:
             delta_pos = 1.5
@@ -226,9 +224,9 @@ class PandaGraspGymEnv(gym.GoalEnv):
             dyaw = action[5] * delta_angle
 
             # Gripper
-            gripper_angle = 1
+            gripper_fingers_state = 1
 
-            return [dx, dy, dz, droll, dpitch, dyaw, gripper_angle]
+            return [dx, dy, dz, droll, dpitch, dyaw, gripper_fingers_state]
 
     def step(self, action):
         action = self.generate_action_array(action)

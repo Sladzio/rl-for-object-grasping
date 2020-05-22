@@ -22,7 +22,7 @@ os.makedirs(eval_log_dir, exist_ok=True)
 
 def get_environment():
     env = PandaGraspGymEnv(urdf_root=object_data.getDataPath(), is_rendering=False, use_ik=True, is_discrete=True,
-                           num_controlled_joints=7, lock_rotation=True, max_step_count=1000,
+                           num_controlled_joints=7, lock_rotation=False, max_step_count=1000,
                            reward_type='dense')
     return env
 
@@ -38,7 +38,7 @@ eval_callback = EvalCallback(eval_env, best_model_save_path='./logs/',
                              deterministic=True, render=False,
                              n_eval_episodes=10)
 
-time_steps = 10000000
+time_steps = 3000000
 
 model = DQN(LnMlpPolicy,
             panda_env,
@@ -46,11 +46,11 @@ model = DQN(LnMlpPolicy,
             tensorboard_log="tensorboard/",
             gamma=.99,
             param_noise=True,
-            exploration_fraction=0.1,
+            exploration_fraction=0.33,
             exploration_final_eps=0.02,
             learning_rate=0.001,
             prioritized_replay=False,
-            target_network_update_freq=1000)
+            target_network_update_freq=1000, batch_size=32)
 
 model.learn(total_timesteps=time_steps,
             callback=[mean_hundred_eps_callback, succ_rate_callback, every_n_steps_callback, eval_callback],

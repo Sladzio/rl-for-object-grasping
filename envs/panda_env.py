@@ -57,6 +57,7 @@ class PandaEnv:
         orn = state[1]
         velL = state[6]
         velA = state[7]
+
         observation.extend(list(pos))
         observation.extend(list(orn))
         observation.extend(list(velL))
