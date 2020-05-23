@@ -70,7 +70,11 @@ class PandaGraspGymEnv(gym.GoalEnv):
             else:
                 self.action_space = 13
         else:
-            self.action_space = self._num_controlled_joints
+            if self._lock_rotation:
+                self.action_space = 3
+            else:
+                self.action_space = 4
+
 
         if self._is_rendering:
             cid = p.connect(p.SHARED_MEMORY)
@@ -91,8 +95,10 @@ class PandaGraspGymEnv(gym.GoalEnv):
             self.action_space = spaces.Discrete(self.action_space)
 
         else:
+            # self.action_space = spaces.Box(-1., 1., shape=(self.action_space,), dtype='float32')
             action_high = np.array([self._largest_action_value] * self.action_space)
             self.action_space = spaces.Box(-action_high, action_high, dtype='float32')
+
         if self._is_rendering:
             base_pos, orn = self._p.getBasePositionAndOrientation(self._panda.panda_id)
             p.resetDebugVisualizerCamera(self._cam_dist, self._cam_yaw, self._cam_pitch, base_pos)
@@ -212,8 +218,8 @@ class PandaGraspGymEnv(gym.GoalEnv):
             return [dx, dy, dz, droll, dpitch, dyaw, gripper_angle]
 
         else:
-            delta_pos = 1.5
-            delta_angle = 1.5
+            delta_pos = 0.01
+            delta_angle = 0.01
 
             # Position
             dx = action[0] * delta_pos
@@ -221,14 +227,18 @@ class PandaGraspGymEnv(gym.GoalEnv):
             dz = action[2] * delta_pos
 
             # Orientation
-            droll = action[3] * delta_angle
-            dpitch = action[4] * delta_angle
-            dyaw = action[5] * delta_angle
+            # droll = action[3] * delta_angle
+            # dpitch = action[4] * delta_angle
+
+            if self._lock_rotation:
+                dyaw = 0
+            else:
+                dyaw = action[3] * delta_angle
 
             # Gripper
             gripper_angle = 1
 
-            return [dx, dy, dz, droll, dpitch, dyaw, gripper_angle]
+            return [dx, dy, dz, 0, 0, dyaw, gripper_angle]
 
     def step(self, action):
         action = self.generate_action_array(action)
