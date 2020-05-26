@@ -4,7 +4,7 @@ import object_data
 from envs import PandaGraspGymEnv
 from stable_baselines.ddpg.policies import MlpPolicy, LnMlpPolicy
 from stable_baselines.common.vec_env import DummyVecEnv
-from stable_baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise
+from stable_baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
 from stable_baselines import DDPG
 import numpy as np
 import os
@@ -14,9 +14,11 @@ from custom_callbacks import MeanHundredEpsTensorboardCallback, SuccessRateTenso
 from stable_baselines.her import HERGoalEnvWrapper
 
 best_mean_reward, n_steps = -np.inf, 0
-log_dir = "log/"
-eval_log_dir = "log/eval/"
-trained_models_dir = "trainedModels/"
+ddpg_tag = "DDPG"
+
+log_dir = ddpg_tag + "/log/"
+eval_log_dir = ddpg_tag + "/log/eval/"
+trained_models_dir = ddpg_tag + "/trainedModels/"
 
 
 def get_environment():
@@ -42,31 +44,26 @@ def main():
     every_n_steps_callback = CheckpointCallback(50000, trained_models_dir)
     mean_hundred_eps_callback = MeanHundredEpsTensorboardCallback(log_dir)
     succ_rate_callback = SuccessRateTensorboardCallback(log_dir)
-    eval_callback = EvalCallback(eval_env,
-                                 best_model_save_path=trained_models_dir,
-                                 log_path=log_dir,
-                                 eval_freq=100000,
-                                 deterministic=True,
-                                 render=False,
-                                 n_eval_episodes=10)
 
-    time_steps = 1000000
+    time_steps = 2000000
 
     n_actions = panda_env.action_space.shape[-1]
-    action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.5) * np.ones(n_actions))
+    action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.005) * np.ones(n_actions))
+    # param_noise = AdaptiveParamNoiseSpec(initial_stddev=0.1, desired_action_stddev=0.1)
 
-    model = DDPG(MlpPolicy,
+    model = DDPG(LnMlpPolicy,
                  panda_env,
+                 eval_env=eval_env,
                  verbose=1,
                  param_noise=None,
                  action_noise=action_noise,
                  tensorboard_log="tensorboard/",
                  gamma=0.99,
-                 n_cpu_tf_sess=1,
-                 random_exploration=0.0)
+                 n_cpu_tf_sess=None)
 
     model.learn(total_timesteps=time_steps,
-                callback=[mean_hundred_eps_callback, succ_rate_callback, every_n_steps_callback, eval_callback],
+                callback=[mean_hundred_eps_callback, succ_rate_callback, every_n_steps_callback],
+                tb_log_name=ddpg_tag,
                 log_interval=10)
 
     model.save("DDPG_model")
