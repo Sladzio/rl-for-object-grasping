@@ -225,11 +225,11 @@ class DQN(OffPolicyRLModel):
                 self.replay_buffer.add(obs, action, rew, new_obs, float(done))
                 obs = new_obs
 
-                if writer is not None:
-                    ep_rew = np.array([rew]).reshape((1, -1))
-                    ep_done = np.array([done]).reshape((1, -1))
-                    tf_util.total_episode_reward_logger(self.episode_reward, ep_rew, ep_done, writer,
-                                                        self.num_timesteps)
+                # if writer is not None:
+                    # ep_rew = np.array([rew]).reshape((1, -1))
+                    # ep_done = np.array([done]).reshape((1, -1))
+                    # tf_util.total_episode_reward_logger(self.episode_reward, ep_rew, ep_done, writer,
+                    #                                     self.num_timesteps)
 
                 episode_rewards[-1] += rew
                 if done:
@@ -270,11 +270,11 @@ class DQN(OffPolicyRLModel):
                             summary, td_errors = self._train_step(obses_t, actions, rewards, obses_tp1, obses_tp1,
                                                                   dones, weights, sess=self.sess, options=run_options,
                                                                   run_metadata=run_metadata)
-                            writer.add_run_metadata(run_metadata, 'step%d' % self.num_timesteps)
+                            # writer.add_run_metadata(run_metadata, 'step%d' % self.num_timesteps)
                         else:
                             summary, td_errors = self._train_step(obses_t, actions, rewards, obses_tp1, obses_tp1,
                                                                   dones, weights, sess=self.sess)
-                        writer.add_summary(summary, self.num_timesteps)
+                        # writer.add_summary(summary, self.num_timesteps)
                     else:
                         _, td_errors = self._train_step(obses_t, actions, rewards, obses_tp1, obses_tp1, dones, weights,
                                                         sess=self.sess)
