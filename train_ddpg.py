@@ -1,9 +1,7 @@
-from stable_baselines.results_plotter import load_results, ts2xy
-
 import object_data
 from envs import PandaGraspGymEnv
 from stable_baselines.ddpg.policies import MlpPolicy, LnMlpPolicy
-from stable_baselines.common.vec_env import DummyVecEnv
+from stable_baselines.common.vec_env import DummyVecEnv,SubprocVecEnv
 from stable_baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
 from stable_baselines import DDPG
 import numpy as np
@@ -13,9 +11,9 @@ from stable_baselines.common.callbacks import CheckpointCallback, EvalCallback
 from custom_callbacks import MeanHundredEpsTensorboardCallback, SuccessRateTensorboardCallback
 from stable_baselines.her import HERGoalEnvWrapper
 
-best_mean_reward, n_steps = -np.inf, 0
-ddpg_tag = "DDPG"
+ddpg_tag = "DDPG_ROTATING_LnMLP"
 
+best_mean_reward, n_steps = -np.inf, 0
 log_dir = ddpg_tag + "/log/"
 eval_log_dir = ddpg_tag + "/log/eval/"
 trained_models_dir = ddpg_tag + "/trainedModels/"
@@ -27,8 +25,9 @@ def get_environment():
                            use_ik=True,
                            is_discrete=False,
                            num_controlled_joints=7,
-                           lock_rotation=True,
-                           max_step_count=1000,
+                           lock_rotation=False,
+                           max_step_count=500,
+                           additional_reward=9500,
                            reward_type='dense')
     return env
 
@@ -41,11 +40,11 @@ def main():
     panda_env = HERGoalEnvWrapper(CustomMonitor(get_environment(), log_dir))
     eval_env = HERGoalEnvWrapper(CustomMonitor(get_environment(), eval_log_dir))
 
-    every_n_steps_callback = CheckpointCallback(50000, trained_models_dir)
+    every_n_steps_callback = CheckpointCallback(15000, trained_models_dir)
     mean_hundred_eps_callback = MeanHundredEpsTensorboardCallback(log_dir)
     succ_rate_callback = SuccessRateTensorboardCallback(log_dir)
 
-    time_steps = 2000000
+    time_steps = 10000000
 
     n_actions = panda_env.action_space.shape[-1]
     action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.005) * np.ones(n_actions))
@@ -56,10 +55,18 @@ def main():
                  eval_env=eval_env,
                  verbose=1,
                  param_noise=None,
-                 action_noise=action_noise,
+                 action_noise=None,
                  tensorboard_log="tensorboard/",
                  gamma=0.99,
+                 nb_eval_steps=2500,
+                 nb_rollout_steps=2500,
+                 nb_train_steps=1500,
+                 buffer_size=2000000,
+                 batch_size=32,
+                 actor_lr=1e-3,
+                 critic_lr=1e-3,
                  n_cpu_tf_sess=None)
+
 
     model.learn(total_timesteps=time_steps,
                 callback=[mean_hundred_eps_callback, succ_rate_callback, every_n_steps_callback],
@@ -67,9 +74,6 @@ def main():
                 log_interval=10)
 
     model.save("DDPG_model")
-
-    # results_plotter.plot_results([log_dir], time_steps, results_plotter.X_TIMESTEPS, "DDPG")
-    # plt.show()
 
 
 if __name__ == '__main__':
