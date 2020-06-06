@@ -21,7 +21,8 @@ class PandaGraspGymEnv(gym.GoalEnv):
                  is_discrete=0,
                  action_repeat_amount=1,
                  is_rendering=False,
-                 max_step_count=1000,
+                 max_step_count=500,
+                 additional_reward=9000,
                  num_controlled_joints=7,
                  is_continuous_downward_enabled=False,
                  reward_type='dense', draw_workspace=False, lock_rotation=True):
@@ -45,6 +46,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._env_step_counter = 0
         self._is_rendering = is_rendering
         self._max_step_count = max_step_count
+        self._additional_reward = additional_reward
         self._terminated = False
         self._cam_dist = 1.8
         self._cam_yaw = 90
@@ -70,7 +72,11 @@ class PandaGraspGymEnv(gym.GoalEnv):
             else:
                 self.action_space = 9
         else:
-            self.action_space = self._num_controlled_joints
+            if self._lock_rotation:
+                self.action_space = 3
+            else:
+                self.action_space = 4
+
 
         if self._is_rendering:
             cid = p.connect(p.SHARED_MEMORY)
@@ -93,6 +99,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
         else:
             action_high = np.array([self._largest_action_value] * self.action_space)
             self.action_space = spaces.Box(-action_high, action_high, dtype='float32')
+
         if self._is_rendering:
             base_pos, orn = self._p.getBasePositionAndOrientation(self._panda.panda_id)
             p.resetDebugVisualizerCamera(self._cam_dist, self._cam_yaw, self._cam_pitch, base_pos)
@@ -210,8 +217,8 @@ class PandaGraspGymEnv(gym.GoalEnv):
             return [dx, dy, dz, 0, 0, dyaw, gripper_fingers_state]
 
         else:
-            delta_pos = 1.5
-            delta_angle = 1.5
+            delta_pos = 0.01
+            delta_angle = 0.075
 
             # Position
             dx = action[0] * delta_pos
@@ -219,14 +226,18 @@ class PandaGraspGymEnv(gym.GoalEnv):
             dz = action[2] * delta_pos
 
             # Orientation
-            droll = action[3] * delta_angle
-            dpitch = action[4] * delta_angle
-            dyaw = action[5] * delta_angle
+            # droll = action[3] * delta_angle
+            # dpitch = action[4] * delta_angle
+
+            if self._lock_rotation:
+                dyaw = 0
+            else:
+                dyaw = action[3] * delta_angle
 
             # Gripper
             gripper_fingers_state = 1
 
-            return [dx, dy, dz, droll, dpitch, dyaw, gripper_fingers_state]
+            return [dx, dy, dz, 0, 0, dyaw, gripper_fingers_state]
 
     def step(self, action):
         action = self.generate_action_array(action)
@@ -357,13 +368,13 @@ class PandaGraspGymEnv(gym.GoalEnv):
     def compute_dense_reward(self, achieved_goal, desired_goal):
         horizontal_distance = self.get_horizontal_distance_to_target()
         reward = -horizontal_distance
-        if horizontal_distance <= 0.025:
+        if horizontal_distance <= 0.015:
             reward = -(self.get_distance_to_target())
         else:
             reward -= 1
 
         if self._is_success(achieved_goal, desired_goal):
-            reward += self._max_step_count
+            reward += self._additional_reward + self._max_step_count
 
         return reward * 10
 
