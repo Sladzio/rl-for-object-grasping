@@ -1,0 +1,41 @@
+CLEAN:
+  n_timesteps: !!float 1e7
+  policy: 'LnMlpPolicy'
+  verbose: 1
+  gamma: 0.99
+  noise_type: 'None'
+  nb_eval_steps: 100
+  nb_rollout_steps: 100
+  nb_train_steps: 50
+  buffer_size:  50000
+  batch_size: 128
+  actor_lr: !!float 1e-4
+  critic_lr: !!float 1e-3
+
+TUNED:
+  n_timesteps: !!float 1e7
+  policy: 'LnMlpPolicy'
+  verbose: 1
+  gamma: 0.99
+  noise_type: 'None'
+  nb_eval_steps: 2500
+  nb_rollout_steps: 2500
+  nb_train_steps: 1500
+  buffer_size:  !!float 2e6
+  batch_size: 32
+  actor_lr: !!float 1e-3
+  critic_lr: !!float 1e-3
+
+ACTION_NOISE:
+  n_timesteps: !!float 1e7
+  policy: 'LnMlpPolicy'
+  verbose: 1
+  gamma: 0.99
+  noise_type: 'ornstein-uhlenbeck'
+  nb_eval_steps: 2500
+  nb_rollout_steps: 2500
+  nb_train_steps: 1500
+  buffer_size:  !!float 2e6
+  batch_size: 32
+  actor_lr: !!float 1e-3
+  critic_lr: !!float 1e-3

@@ -22,7 +22,8 @@ class PandaGraspGymEnv(gym.GoalEnv):
                  action_repeat_amount=1,
                  is_rendering=False,
                  max_step_count=500,
-                 additional_reward=9000,
+                 additional_reward=9500,
+                 min_horizontal_distance_reward=0.015,
                  num_controlled_joints=7,
                  is_continuous_downward_enabled=False,
                  reward_type='dense', draw_workspace=False, lock_rotation=True):
@@ -47,6 +48,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
         self._is_rendering = is_rendering
         self._max_step_count = max_step_count
         self._additional_reward = additional_reward
+        self._min_horizontal_distance_reward = min_horizontal_distance_reward
         self._terminated = False
         self._cam_dist = 1.8
         self._cam_yaw = 90
@@ -368,7 +370,7 @@ class PandaGraspGymEnv(gym.GoalEnv):
     def compute_dense_reward(self, achieved_goal, desired_goal):
         horizontal_distance = self.get_horizontal_distance_to_target()
         reward = -horizontal_distance
-        if horizontal_distance <= 0.015:
+        if horizontal_distance <= self._min_horizontal_distance_reward:
             reward = -(self.get_distance_to_target())
         else:
             reward -= 1

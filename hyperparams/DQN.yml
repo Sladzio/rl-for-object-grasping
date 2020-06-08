@@ -1,0 +1,38 @@
+CLEAN:
+  n_timesteps: 3000000
+  policy: 'LnMlpPolicy'
+  verbose: 1
+  gamma: 0.99
+  param_noise: False
+  exploration_fraction: 0.1
+  exploration_final_eps: 0.02
+  learning_rate: !!float 5e-4
+  prioritized_replay: False
+  target_network_update_freq: 500
+  batch_size: 32
+
+TUNED:
+  n_timesteps: 3000000
+  policy: 'LnMlpPolicy'
+  verbose: 1
+  gamma: 0.99
+  param_noise: False
+  exploration_fraction: 0.35
+  exploration_final_eps: 0.02
+  learning_rate: 0.001
+  prioritized_replay: False
+  target_network_update_freq: 1000
+  batch_size: 32
+
+PARAM_NOISE:
+  n_timesteps: 3000000
+  policy: 'LnMlpPolicy'
+  verbose: 1
+  gamma: 0.99
+  param_noise: True
+  exploration_fraction: 0.35
+  exploration_final_eps: 0.02
+  learning_rate: 0.001
+  prioritized_replay: False
+  target_network_update_freq: 1000
+  batch_size: 32
