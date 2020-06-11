@@ -1,17 +1,18 @@
-import os
-import numpy as np
-
 import object_data
-from CustomMonitor import CustomMonitor
-from custom_callbacks import MeanHundredEpsTensorboardCallback, SuccessRateTensorboardCallback
 from envs import PandaGraspGymEnv
-from stable_baselines import DQN
-from stable_baselines.common.callbacks import CheckpointCallback, EvalCallback
+from stable_baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
+from stable_baselines import TD3
+import numpy as np
+import os
+from CustomMonitor import CustomMonitor
+from stable_baselines.common.callbacks import CheckpointCallback
+from custom_callbacks import MeanHundredEpsTensorboardCallback, SuccessRateTensorboardCallback, \
+    StdHundredEpsTensorboardCallback, SaveOnBestTrainingRewardCallback
 from stable_baselines.her import HERGoalEnvWrapper
 import argparse
 import yaml
 
-algorithm_name = "DQN"
+algorithm_name = "TD3"
 best_mean_reward, n_steps = -np.inf, 0
 
 
@@ -20,7 +21,7 @@ def get_environment(_max_step_count=500, _additional_reward=9500,
     env = PandaGraspGymEnv(urdf_root=object_data.getDataPath(),
                            is_rendering=False,
                            use_ik=True,
-                           is_discrete=True,
+                           is_discrete=False,
                            num_controlled_joints=7,
                            lock_rotation=_lock_rotation,
                            max_step_count=_max_step_count,
@@ -30,9 +31,9 @@ def get_environment(_max_step_count=500, _additional_reward=9500,
     return env
 
 
-def main(_dqn_tag, _tagSuffix, _saveFreq, _evalFreq, _evalNum, _lock_rotation, hyperparams):
+def main(_ddpg_tag, _tagSuffix, _saveFreq, _lock_rotation, hyperparams):
     rotation_tag = "_LOCKED_ROT_" if _lock_rotation else "_ROTATION_"
-    full_tag = algorithm_name + rotation_tag + _dqn_tag + _tagSuffix
+    full_tag = algorithm_name + rotation_tag + _ddpg_tag + _tagSuffix
     current_dir = algorithm_name + "/" + full_tag
     log_dir = current_dir + "/log/"
     eval_log_dir = current_dir + "/log/eval/"
@@ -47,19 +48,25 @@ def main(_dqn_tag, _tagSuffix, _saveFreq, _evalFreq, _evalNum, _lock_rotation, h
     callbacks = []
     callbacks.append(CheckpointCallback(_saveFreq, trained_models_dir)) if _saveFreq > 0 else None
     callbacks.append(MeanHundredEpsTensorboardCallback(log_dir))
+    callbacks.append(StdHundredEpsTensorboardCallback(log_dir))
     callbacks.append(SuccessRateTensorboardCallback(log_dir))
-    callbacks.append(EvalCallback(eval_env,
-                                  best_model_save_path=trained_models_dir,
-                                  log_path=log_dir,
-                                  eval_freq=_evalFreq,
-                                  deterministic=True,
-                                  render=False,
-                                  n_eval_episodes=_evalNum)) if _evalFreq > 0 else None
+    callbacks.append(SaveOnBestTrainingRewardCallback(10000, log_dir))
 
     time_steps = hyperparams.pop('n_timesteps') if hyperparams.get('n_timesteps') is not None else None
 
-    model = DQN(env=panda_env,
+    param_noise = None
+    action_noise = None
+    if hyperparams.get('noise_type') is not None:
+        noise_type = hyperparams.pop('noise_type').strip()
+        if 'ornstein-uhlenbeck' in noise_type:
+            n_actions = panda_env.action_space.shape[-1]
+            action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions),
+                                                        sigma=float(0.005) * np.ones(n_actions))
+
+    model = TD3(env=panda_env,
+                action_noise=action_noise,
                 tensorboard_log="tensorboard/",
+                n_cpu_tf_sess=None,
                 **hyperparams)
 
     model.learn(total_timesteps=time_steps,
@@ -73,18 +80,14 @@ def main(_dqn_tag, _tagSuffix, _saveFreq, _evalFreq, _evalNum, _lock_rotation, h
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--tag', help='Name of configuration tag used for algorithm parameters '
-                                            ' Default: PARAM_NOISE', default='PARAM_NOISE',
-                        choices=['CLEAN', 'TUNED', 'PARAM_NOISE'], type=lambda x: str(x).upper(), required=False)
+                                            ' Default: ACTION_NOISE', default='ACTION_NOISE',
+                        choices=['CLEAN', 'TUNED', 'ACTION_NOISE'], type=lambda x: str(x).upper(), required=False)
     parser.add_argument('-s', '--suf', help='Suffix added for nametag of trained model',
                         default='', type=str, required=False)
     parser.add_argument('-l', '--lockRot', help='Should lock rotation of targeted object Default: True',
                         required=False, default=True, type=lambda x: (str(x).lower() == 'true'))
-    parser.add_argument('--evalNum', help='Number of episodes to use for evaluation',
-                        default=10, type=int)
-    parser.add_argument('--evalFreq', help='Evaluate the model every n steps (if negative, no evaluation',
-                        default=100000, type=int)
-    parser.add_argument('--saveFreq', help='Save the model every n steps (if negative, no checkpoint)',
-                        default=50000, type=int)
+    parser.add_argument('--saveFreq', help='Save checkpoint model every n steps (if negative, no checkpoint)',
+                        default=25000, type=int)
     args = parser.parse_args()
 
     # Load hyperparameters from yaml file
@@ -95,5 +98,4 @@ if __name__ == '__main__':
         else:
             raise ValueError("{} Hyperparameters not found for {}".format(args.tag, algorithm_name))
 
-    main(_dqn_tag=str(args.tag).upper(), _tagSuffix=args.suf, _saveFreq=args.saveFreq, _evalFreq=args.evalFreq,
-         _evalNum=args.evalNum, _lock_rotation=args.lockRot, hyperparams=hyperparams)
+    main(_ddpg_tag=str(args.tag).upper(), _tagSuffix=args.suf, _saveFreq=args.saveFreq, _lock_rotation=args.lockRot, hyperparams=hyperparams)

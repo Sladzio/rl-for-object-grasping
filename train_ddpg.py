@@ -6,7 +6,8 @@ import numpy as np
 import os
 from CustomMonitor import CustomMonitor
 from stable_baselines.common.callbacks import CheckpointCallback
-from custom_callbacks import MeanHundredEpsTensorboardCallback, SuccessRateTensorboardCallback
+from custom_callbacks import MeanHundredEpsTensorboardCallback, SuccessRateTensorboardCallback, \
+    StdHundredEpsTensorboardCallback, SaveOnBestTrainingRewardCallback
 from stable_baselines.her import HERGoalEnvWrapper
 import argparse
 import yaml
@@ -31,7 +32,8 @@ def get_environment(_max_step_count=500, _additional_reward=9500,
 
 
 def main(_ddpg_tag, _tagSuffix, _saveFreq, _lock_rotation, hyperparams):
-    full_tag = algorithm_name + "_" + _ddpg_tag + _tagSuffix
+    rotation_tag = "_LOCKED_ROT_" if _lock_rotation else "_ROTATION_"
+    full_tag = algorithm_name + rotation_tag + _ddpg_tag + _tagSuffix
     current_dir = algorithm_name + "/" + full_tag
     log_dir = current_dir + "/log/"
     eval_log_dir = current_dir + "/log/eval/"
@@ -46,7 +48,9 @@ def main(_ddpg_tag, _tagSuffix, _saveFreq, _lock_rotation, hyperparams):
     callbacks = []
     callbacks.append(CheckpointCallback(_saveFreq, trained_models_dir)) if _saveFreq > 0 else None
     callbacks.append(MeanHundredEpsTensorboardCallback(log_dir))
+    callbacks.append(StdHundredEpsTensorboardCallback(log_dir))
     callbacks.append(SuccessRateTensorboardCallback(log_dir))
+    callbacks.append(SaveOnBestTrainingRewardCallback(10000, log_dir))
 
     time_steps = hyperparams.pop('n_timesteps') if hyperparams.get('n_timesteps') is not None else None
 
@@ -80,14 +84,13 @@ def main(_ddpg_tag, _tagSuffix, _saveFreq, _lock_rotation, hyperparams):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--tag', help='Name of configuration tag used for algorithm parameters '
-                                            '[CLEAN, TUNED, ACTION_NOISE] \n Default: ACTION_NOISE',
-                        default='ACTION_NOISE', type=str, required=False)
+                                            ' Default: ACTION_NOISE', default='ACTION_NOISE',
+                        choices=['CLEAN', 'TUNED', 'ACTION_NOISE'], type=lambda x: str(x).upper(), required=False)
     parser.add_argument('-s', '--suf', help='Suffix added for nametag of trained model',
                         default='', type=str, required=False)
-    parser.add_argument('-l', '--lockRot', help='Should lock rotation of targeted object '
-                                               '\n Default: True', required=False, default=True,
-                        type=lambda x: (str(x).lower() == 'true'))
-    parser.add_argument('--saveFreq', help='Save the model every n steps (if negative, no checkpoint)',
+    parser.add_argument('-l', '--lockRot', help='Should lock rotation of targeted object Default: True',
+                        required=False, default=True, type=lambda x: (str(x).lower() == 'true'))
+    parser.add_argument('--saveFreq', help='Save checkpoint model every n steps (if negative, no checkpoint)',
                         default=25000, type=int)
     args = parser.parse_args()
 
