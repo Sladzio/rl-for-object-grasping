@@ -24,7 +24,7 @@ TUNED:
   target_network_update_freq: 1000
   batch_size: 32
 
-PARAM_NOISE:
+NOISE:
   n_timesteps: 3000000
   policy: 'LnMlpPolicy'
   verbose: 1

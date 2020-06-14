@@ -2,8 +2,8 @@ import os
 import numpy as np
 
 import object_data
-from CustomMonitor import CustomMonitor
-from custom_callbacks import MeanHundredEpsTensorboardCallback, SuccessRateTensorboardCallback
+from utils.CustomMonitor import CustomMonitor
+from utils.custom_callbacks import MeanHundredEpsTensorboardCallback, SuccessRateTensorboardCallback
 from envs import PandaGraspGymEnv
 from stable_baselines import DQN
 from stable_baselines.common.callbacks import CheckpointCallback, EvalCallback

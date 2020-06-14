@@ -1,5 +1,5 @@
 CLEAN:
-  n_timesteps: !!float 1e7
+  n_timesteps: 10000000   # 1e7
   policy: 'LnMlpPolicy'
   verbose: 1
   gamma: 0.99
@@ -9,11 +9,11 @@ CLEAN:
   nb_train_steps: 50
   buffer_size:  50000
   batch_size: 128
-  actor_lr: !!float 1e-4
-  critic_lr: !!float 1e-3
+  actor_lr: 0.0001        # 1e-4
+  critic_lr: 0.001        # 1e-3
 
 TUNED:
-  n_timesteps: !!float 1e7
+  n_timesteps: 10000000   # 1e7
   policy: 'LnMlpPolicy'
   verbose: 1
   gamma: 0.99
@@ -21,13 +21,13 @@ TUNED:
   nb_eval_steps: 2500
   nb_rollout_steps: 2500
   nb_train_steps: 1500
-  buffer_size:  !!float 2e6
+  buffer_size:  2000000   # 2e6
   batch_size: 32
-  actor_lr: !!float 1e-3
-  critic_lr: !!float 1e-3
+  actor_lr: 0.001         # 1e-3
+  critic_lr: 0.001        # 1e-3
 
-ACTION_NOISE:
-  n_timesteps: !!float 1e7
+NOISE:
+  n_timesteps: 10000000   # 1e7
   policy: 'LnMlpPolicy'
   verbose: 1
   gamma: 0.99
@@ -35,7 +35,7 @@ ACTION_NOISE:
   nb_eval_steps: 2500
   nb_rollout_steps: 2500
   nb_train_steps: 1500
-  buffer_size:  !!float 2e6
+  buffer_size:  2000000   # 2e6
   batch_size: 32
-  actor_lr: !!float 1e-3
-  critic_lr: !!float 1e-3
+  actor_lr: 0.001         # 1e-3
+  critic_lr: 0.001        # 1e-3

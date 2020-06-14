@@ -1,4 +1,4 @@
-from plotter import plot_rewards
+from utils import plot_rewards
 
 dqn_rot_clean = ("DQN_ROT_CLEAN", "/Users/sladek-patryk/rl-for-object-grasping/evaluation-runs/DQN_ROT_CLEAN/log")
 dqn_rot_tuned = ("DQN_ROT_TUNED", "/Users/sladek-patryk/rl-for-object-grasping/evaluation-runs/DQN_ROT_TUNED/log")

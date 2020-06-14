@@ -1,10 +1,10 @@
 CLEAN:
-  n_timesteps: !!float 1e7
+  n_timesteps: 10000000   # 1e7
   policy: 'MlpPolicy'
   verbose: 1
   gamma: 0.99
   learning_starts: 100
-  learning_rate: 3e-4
+  learning_rate: 0.0003
   noise_type: 'None'
   buffer_size:  50000
   batch_size: 128
@@ -12,27 +12,27 @@ CLEAN:
   train_freq: 100
 
 TUNED:
-  n_timesteps: !!float 1e7
+  n_timesteps: 10000000   # 1e7
   policy: 'MlpPolicy'
   verbose: 1
   gamma: 0.99
   learning_starts: 25000
   learning_rate: 0.001
   noise_type: 'None'
-  buffer_size:  !!float 1e6
+  buffer_size:  1000000   # 1e6
   batch_size: 100
   gradient_steps: 2000
   train_freq: 2000
 
-ACTION_NOISE:
-  n_timesteps: !!float 1e7
+NOISE:
+  n_timesteps: 10000000   # 1e7
   policy: 'MlpPolicy'
   verbose: 1
   gamma: 0.99
   learning_starts: 25000
   learning_rate: 0.001
   noise_type: 'ornstein-uhlenbeck'
-  buffer_size:  !!float 1e6
+  buffer_size:  1000000   # 1e6
   batch_size: 100
   gradient_steps: 2000
   train_freq: 2000

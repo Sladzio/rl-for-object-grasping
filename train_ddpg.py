@@ -4,9 +4,9 @@ from stable_baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise, AdaptivePa
 from stable_baselines import DDPG
 import numpy as np
 import os
-from CustomMonitor import CustomMonitor
+from utils.CustomMonitor import CustomMonitor
 from stable_baselines.common.callbacks import CheckpointCallback
-from custom_callbacks import MeanHundredEpsTensorboardCallback, SuccessRateTensorboardCallback, \
+from utils.custom_callbacks import MeanHundredEpsTensorboardCallback, SuccessRateTensorboardCallback, \
     StdHundredEpsTensorboardCallback, SaveOnBestTrainingRewardCallback
 from stable_baselines.her import HERGoalEnvWrapper
 import argparse

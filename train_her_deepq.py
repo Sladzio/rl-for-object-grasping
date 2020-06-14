@@ -1,14 +1,13 @@
 import os
 import numpy as np
 import object_data
-from custom_callbacks import MeanHundredEpsTensorboardCallback
+from utils.custom_callbacks import MeanHundredEpsTensorboardCallback
 from envs import PandaGraspGymEnv
 from stable_baselines import DQN, HER
 from stable_baselines.bench import Monitor
-from stable_baselines.common.callbacks import EvalCallback, CheckpointCallback
+from stable_baselines.common.callbacks import CheckpointCallback
 from stable_baselines.deepq.policies import LnMlpPolicy
 from stable_baselines.her import GoalSelectionStrategy
-from stable_baselines.her import HERGoalEnvWrapper
 
 best_mean_reward, n_steps = -np.inf, 0
 log_dir = "tmp/"
