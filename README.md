@@ -110,11 +110,43 @@ $ pip install tensorflow==1.15
 
 
 ## Train and Test
-To train model run any train_\*.py file, where time_steps is the number of steps in total the agent will do for the environment.
-Temporary used models are saved in ./tmp/ folder as best_model.pkl. During training you can watch learning process with tensorboard.
-After training is done, model will be saved as model.pkl in current directory, you can test it running corresponding test_\*.py file.
+### Training 
+To train model with DQN algorithm and tuned version of hyperparameters with enabled rotation of grasped object and save checkpoint models every 25000 steps. Final model is concluded from evaluation every 50000 steps on 25 esisodes. Both final model and checkpoint models it this case will be saved in './DQN/DQN_ENABLED_ROT_TUNED/models' directory.
+Run train.py file, with parameters: 
+```
+$ python train.py --algo DQN --tag TUNED --lockRot False --saveFreq 25000 --evalFreq 50000 --evalNum 25
+```
 
+Another example to train with locked rotation of grasped object and DDPG algorithm with noise imposed on actions and save checkpoint models every 20000 steps. Models *.zip will be saved in './DDPG/DDPG_LOCKED_ROT_TUNED/models' directory.
+```
+$ python train.py --algo DDPG --tag TUNED --lockRot True --saveFreq 20000
+```
 
+For more options type:
+```
+$ python train.py --help
+```
+
+### Test and evaluate policy
+For testing model trained by DQN algorithm you need to specify directory path with trained models and concrete version of model and specify for obserbvation if object rotation should be locked:
+```
+$ python evaluate.py --algo DQN --dir DQN/DQN_ENABLED_ROT_TUNED/models/ --model rl_model_1150000_steps.zip --lockRot False 
+```
+
+You can additionally turn of visualization for faster evaluation and evaluate on 5000 episodes instead of 100:
+```
+$ python evaluate.py --algo TD3 --dir TD3/TD3_LOCKED_ROT_TUNED/models/ --model best_model.zip --lockRot True --render False --evalNum 5000
+```
+
+If you don't want to perform any evaluation and just simply watch object being grasped you can turn it off by setting eval flag to False:
+```
+$ python evaluate.py --algo DDPG --dir DDPG/DDPG_LOCKED_ROT_TUNED/models/ --model rl_model_200000_steps.zip --lockRot False --eval False
+```
+
+For more options run:
+```
+$ python evaluate.py --help
+```
 
 ## Tensorboard
 
