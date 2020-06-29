@@ -148,6 +148,19 @@ For more options run:
 $ python evaluate.py --help
 ```
 
+### Already trained models
+You can also try best models already trained for both experiments located at './BestModels/' folder\
+For experiment with random position and locked rotation of grasped object with DQN algorithm:
+```
+$ python evaluate.py --algo DQN --model DQN_locked_rot.zip
+```
+
+For experiment with random pose of grasped object with TD3 algorithm:
+```
+$ python evaluate.py --algo TD3 --model TD3_rotating.zip -l False
+```
+
+
 ## Tensorboard
 
 TensorBoard is a tool for providing the measurements and visualizations needed during the machine learning workflow. It enables tracking experiment metrics like loss and accuracy, visualizing the model graph, projecting embeddings to a lower dimensional space, and much more.
